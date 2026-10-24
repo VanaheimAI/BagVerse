@@ -1,0 +1,13 @@
+<!doctype html><html><body style="margin:0;background:#222">
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+const r=new THREE.WebGLRenderer({antialias:true});r.setSize(1000,500);document.body.appendChild(r.domElement);
+const s=new THREE.Scene();s.add(new THREE.HemisphereLight(0xffffff,0x444444,3));
+const c=new THREE.PerspectiveCamera(30,2,0.1,100);c.position.set(0.7,0.6,4);c.lookAt(0.7,0.4,0);
+const info={};
+for(const [i,f] of (new URLSearchParams(location.search).get('l')||'king.glb,king_auto.glb').split(',').entries()){const g=await new GLTFLoader().loadAsync('/public/assets/'+f);g.scene.position.x=i*1.4;s.add(g.scene);
+ const lst=[];g.scene.traverse(o=>lst.push(o.name+' '+o.type+' p'+o.position.toArray().map(v=>v.toFixed(2))+' r'+o.rotation.toArray().slice(0,3).map(v=>(+v).toFixed(2))+' s'+o.scale.toArray().map(v=>v.toFixed(2))));info[f]=lst.slice(0,5);}
+r.render(s,c);window.info=info;window.done=true;
+</script></body></html>

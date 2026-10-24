@@ -1,0 +1,21 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const p = await b.newPage({ viewport: { width: 560, height: 420 } });
+p.on('pageerror', (e) => console.log('[pageerror]', e.message));
+p.on('console', (m) => { if (/grips/.test(m.text())) console.log('[console]', m.text()); });
+await p.addInitScript((ch) => { localStorage.setItem('bagverse.char', ch); }, process.env.CH || 'goldenking');
+await p.goto('http://localhost:4173/?autostart&fixeddt=0.05&q=medium');
+await p.waitForFunction('window.__ready && window.__frames > 3', null, { timeout: 900000 });
+const frames = async (n) => { const f0 = await p.evaluate('window.__frames'); await p.waitForFunction(`window.__frames > ${f0 + n}`, null, { timeout: 900000, polling: 500 }); };
+await p.evaluate(() => { document.getElementById('hud').style.visibility = 'hidden'; window.__bagverse.player.facing = Math.PI / 2; window.__bagverse.summonScooter(); });
+await p.waitForFunction(() => !!window.__bagverse.player.c.actions.Ride, null, { timeout: 900000, polling: 1000 });
+const err = () => p.evaluate(() => { const B = window.__bagverse, s = B.scooter, c = B.player.c, V = s.pos.constructor; const out = {}; for (const k of ['L', 'R']) { const h = c._arms?.[k][2]; if (!h) return 'no arms'; const hw = h.getWorldPosition(new V()); out[k] = +hw.distanceTo(s.root.localToWorld(s.grips[k].clone())).toFixed(3); } return JSON.stringify(out); });
+const shot = async (name, x, z, h) => {
+  await p.evaluate(([x, z, h]) => { const s = window.__bagverse.scooter; const a = s.local(x, z); window.__camOverride = { pos: [a.x, s.pos.y + h, a.z], at: [s.pos.x, s.pos.y + 0.85, s.pos.z + 0] }; }, [x, z, h]);
+  await frames(2); await p.screenshot({ path: `/tmp/claude-0/${name}.png`, timeout: 900000 });
+};
+await frames(3); console.log('stop hand-grip error (m)', await err());
+await shot('h_front34', 1.6, 2.4, 1.7); await shot('h_side', 2.6, 0.2, 1.2); await shot('h_back', 0.9, -2.6, 2.0);
+await p.evaluate(() => { window.__camOverride = null; }); await p.keyboard.down('KeyW'); await frames(14); console.log('riding hand-grip error (m)', await err());
+await shot('h_ride34', 1.6, 2.4, 1.7);
+await b.close(); console.log('done');

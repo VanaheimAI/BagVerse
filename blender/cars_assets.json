@@ -1,0 +1,146 @@
+{
+ "CAR_BRT_Default": {
+  "kind": "car",
+  "size": [
+   2.256,
+   4.6,
+   1.114
+  ],
+  "nose": -1,
+  "model": "BRT",
+  "paint": "Default",
+  "hover": 0.0
+ },
+ "CAR_BRT_Black": {
+  "kind": "car",
+  "size": [
+   2.256,
+   4.6,
+   1.114
+  ],
+  "nose": -1,
+  "model": "BRT",
+  "paint": "Black",
+  "hover": 0.0
+ },
+ "CAR_BRT_Red": {
+  "kind": "car",
+  "size": [
+   2.256,
+   4.6,
+   1.114
+  ],
+  "nose": -1,
+  "model": "BRT",
+  "paint": "Red",
+  "hover": 0.0
+ },
+ "CAR_BRT_White": {
+  "kind": "car",
+  "size": [
+   2.256,
+   4.6,
+   1.114
+  ],
+  "nose": -1,
+  "model": "BRT",
+  "paint": "White",
+  "hover": 0.0
+ },
+ "CAR_SRC_Default": {
+  "kind": "car",
+  "size": [
+   1.915,
+   4.6,
+   1.181
+  ],
+  "nose": -1,
+  "model": "SRC",
+  "paint": "Default",
+  "hover": 0.0
+ },
+ "CAR_SRC_Black": {
+  "kind": "car",
+  "size": [
+   1.915,
+   4.6,
+   1.181
+  ],
+  "nose": -1,
+  "model": "SRC",
+  "paint": "Black",
+  "hover": 0.0
+ },
+ "CAR_SRC_Red": {
+  "kind": "car",
+  "size": [
+   1.915,
+   4.6,
+   1.181
+  ],
+  "nose": -1,
+  "model": "SRC",
+  "paint": "Red",
+  "hover": 0.0
+ },
+ "CAR_SRC_White": {
+  "kind": "car",
+  "size": [
+   1.915,
+   4.6,
+   1.181
+  ],
+  "nose": -1,
+  "model": "SRC",
+  "paint": "White",
+  "hover": 0.0
+ },
+ "CAR_FTV_Default": {
+  "kind": "car",
+  "size": [
+   1.838,
+   4.6,
+   1.621
+  ],
+  "nose": -1,
+  "model": "FTV",
+  "paint": "Default",
+  "hover": 0.6
+ },
+ "CAR_FTV_Black": {
+  "kind": "car",
+  "size": [
+   1.838,
+   4.6,
+   1.621
+  ],
+  "nose": -1,
+  "model": "FTV",
+  "paint": "Black",
+  "hover": 0.6
+ },
+ "CAR_FTV_Red": {
+  "kind": "car",
+  "size": [
+   1.838,
+   4.6,
+   1.621
+  ],
+  "nose": -1,
+  "model": "FTV",
+  "paint": "Red",
+  "hover": 0.6
+ },
+ "CAR_FTV_White": {
+  "kind": "car",
+  "size": [
+   1.838,
+   4.6,
+   1.621
+  ],
+  "nose": -1,
+  "model": "FTV",
+  "paint": "White",
+  "hover": 0.6
+ }
+}

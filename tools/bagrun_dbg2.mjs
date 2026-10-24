@@ -1,0 +1,13 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const p = await (await b.newContext({ viewport: { width: 640, height: 360 } })).newPage();
+await p.goto('http://localhost:4173/?autostart&fixeddt=0.1&q=low&unlockall');
+await p.waitForFunction('window.__ready && window.__frames > 3', null, { timeout: 900000 });
+console.log(await p.evaluate(() => { const r = window.__bagverse.bagRun; r.warm(Infinity); const o = [];
+  o.push('reach a ' + r.reach.has(r.cellKey(-9, 16)) + ' b ' + r.reach.has(r.cellKey(0, 16)));
+  const e = []; for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (dx || dz) e.push(dx + ',' + dz + ':' + r.edge(-9, 16, dx, dz)); o.push(e.join(' '));
+  const pa = r.astar([-9, 16], [0, 16], null); o.push('plain ' + (pa && pa.length));
+  const pb = r.astar([0, 16], [-9, 16], null); o.push('rev ' + (pb && pb.length));
+  const pc = r.astar([-9, 16], [-8, 16], null); o.push('1step ' + (pc && pc.length));
+  return o.join('\n'); }));
+await b.close();

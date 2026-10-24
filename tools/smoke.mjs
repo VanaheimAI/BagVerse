@@ -1,0 +1,11 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const p = await (await b.newContext({ viewport: { width: 800, height: 450 } })).newPage();
+const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('console', (m) => { if (m.type() === 'error') errs.push(m.text().slice(0, 160)); });
+await p.goto('http://localhost:4173/?autostart&fixeddt=0.1&q=low', { timeout: 900000 });
+await p.waitForFunction('window.__ready && window.__frames > 5', null, { timeout: 900000 });
+console.log('mp room:', await p.evaluate(() => !!window.__bagverse.mp.room), 'lb db:', await p.evaluate(() => !!window.__bagverse.lb.db), 'chip hidden:', await p.evaluate(() => document.getElementById('mpchip').hidden));
+await p.keyboard.press('KeyL'); await p.waitForTimeout(500);
+console.log('L ->', await p.evaluate(() => document.getElementById('mbody').textContent.trim().slice(0, 90)));
+console.log('errors:', errs.length ? errs : 'none');
+await b.close();

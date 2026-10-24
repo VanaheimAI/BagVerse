@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>BagVerse</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- loading -->
+  <div id="loader">
+    <div class="logo" role="img" aria-label="BagVerse">BAGVERSE</div>
+    <div class="tag">THE BAG SQUARE IS LOADING</div>
+    <div class="bar"><div id="loadbar"></div></div>
+    <div id="loadtxt">0%</div>
+    <div id="enter" hidden>
+      <button data-char="goldenking"><b>GOLDEN KING</b><small>Whale tier drip</small></button>
+      <button data-char="maria"><b>MARIA</b><small>Mixamo test skin</small></button>
+      <button data-char="shiba"><b>SHIBA HOODIE</b><small>Doge-pack streetwear</small></button>
+      <button data-char="queen"><b>FUTURE QUEEN</b><small>Chrome-age royalty</small></button>
+      <button data-char="witch"><b>PUMPKIN WITCH</b><small>Spooky-season cosplay</small></button>
+    </div>
+    <div class="hint">WASD move · Shift walk · Space jump · Drag / click to look · E interact · K skins · 1-2 emotes · F flashmob · R scooter · J missions · M map · N time of day · Enter chat</div>
+    <div class="credits">Vision 1789 car by <a href="https://sketchfab.com/amogusstrikesback2" target="_blank" rel="noopener">amogusstrikesback2</a> · <a href="https://sketchfab.com/3d-models/vision-1789-2a4ca3afef97466d817fdb8000b8a8c0" target="_blank" rel="noopener">Sketchfab</a> · CC BY 4.0 · Sound effects from <a href="https://dailysounds.org" target="_blank" rel="noopener">DailySounds.org</a></div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" hidden>
+    <div id="topleft">
+      <div class="logo small" role="img" aria-label="BagVerse">BAGVERSE</div>
+      <div class="lvlrow">
+        <div id="lvl">L1</div>
+        <div class="bars">
+          <div class="xpbar"><div id="xpfill"></div><div id="restfill"></div></div>
+          <div class="ptbar"><div id="ptfill"></div></div>
+        </div>
+      </div>
+      <div id="tier"><span class="gem">◆</span><div><b id="tiername">NORMIE</b><small id="tierrange">0 – 9K TOKENS</small></div></div>
+      <div id="playstate">PROOF-OF-PLAY · ACTIVE</div>
+      <button id="tracker" aria-label="Missions"></button>
+      <div id="xpfeed"></div>
+    </div>
+
+    <div id="topright">
+      <canvas id="minimap" width="200" height="200"></canvas>
+      <div id="balance"><span class="coin">◎</span><b id="bagbal">0</b> $BAG</div>
+      <div id="zonechip">THE BAG SQUARE</div>
+      <button id="lookbtn" title="Time of day (N)">☀ DAY</button>
+      <button id="gfxbtn" title="Graphics quality (reloads)">GFX · HIGH</button>
+      <button id="soundbtn" title="Sound on / off">🔊 SOUND ON</button>
+    </div>
+
+    <div id="zonetoast"></div>
+    <div id="speedo"><b id="speed">0</b><small>KM/H</small></div>
+    <div id="prompt"></div>
+    <div id="toast"></div>
+    <div id="watch"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" class="bg"/><circle id="watcharc" cx="18" cy="18" r="15" class="fg"/></svg><span>WATCHING AD</span></div>
+
+    <div id="chat">
+      <div id="chatlog"></div>
+      <input id="chatin" maxlength="120" placeholder="Press Enter to chat" autocomplete="off" />
+    </div>
+
+    <div id="actions">
+      <button data-act="skins"><i>👕</i><span>Skins</span><kbd>K</kbd></button>
+      <button data-act="inventory"><i>🎒</i><span>Inventory</span><kbd>I</kbd></button>
+      <button data-act="emotes"><i>💃</i><span>Emotes</span><kbd>G</kbd></button>
+      <button data-act="ride" aria-label="Scooter"><i>🛴</i><span>Scooter</span><kbd>R</kbd></button>
+      <button data-act="map"><i>🗺️</i><span>Map</span><kbd>M</kbd></button>
+      <button data-act="missions" class="desktoponly" aria-label="Missions"><i>📜</i><span>Missions</span><kbd>J</kbd></button>
+      <button data-act="chat" class="touchonly" aria-label="Chat"><i>💬</i><span>Chat</span></button>
+      <button data-act="menu" class="touchonly" aria-label="Settings"><i>⚙️</i><span>Settings</span></button>
+    </div>
+
+    <div id="emotewheel" hidden>
+      <button data-emote="Thriller">🧟 Thriller <kbd>1</kbd></button>
+      <button data-emote="Dance">🕺 Dance <kbd>2</kbd></button>
+    </div>
+
+    <!-- mobile -->
+    <div id="joy"><div id="joyknob"></div></div>
+    <button id="jumpbtn">JUMP</button>
+    <button id="usebtn">E</button>
+    <button id="mobbtn" title="Start a flashmob (F)">🕺 FLASHMOB</button>
+  </div>
+
+  <div id="modal" hidden>
+    <div class="card">
+      <h2 id="mtitle"></h2>
+      <div id="mbody"></div>
+      <div class="mbtns"><button id="mclose">CLOSE</button></div>
+    </div>
+  </div>
+
+  <div id="bigmap" hidden>
+    <canvas id="bigmapcv" width="900" height="900"></canvas>
+    <div class="bmhint">Click a district to fast-travel · M to close</div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

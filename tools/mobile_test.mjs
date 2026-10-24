@@ -1,0 +1,32 @@
+import { chromium, devices } from 'playwright';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const DEV = process.env.DEV || 'Pixel 7';
+const ctx = await b.newContext({ ...devices[DEV] });
+if (process.env.CRASHED) await ctx.addInitScript(() => { if (!sessionStorage.getItem('t')) { sessionStorage.setItem('t', '1'); localStorage.setItem('bagverse.pipeline', '2'); localStorage.setItem('bagverse.boot', String(Date.now())); } });
+const p = await ctx.newPage();
+const glbs = [];
+p.on('request', (r) => { if (/\.glb/.test(r.url())) glbs.push(r.url().split('/').pop()); });
+p.on('pageerror', (e) => console.log('[pageerror]', e.message));
+p.on('console', (m) => { if (m.type() === 'error' && !/TUNNEL/.test(m.text())) console.log('[console.error]', m.text().slice(0, 200)); });
+await p.goto('http://localhost:4173/' + (process.env.CRASHED ? '' : '?fixeddt'));
+await p.waitForFunction('window.__ready && window.__frames > 3', null, { timeout: 900000 });
+console.log('quality', await p.evaluate('window.__bagverse.quality'), 'gfx', await p.evaluate(`document.getElementById('gfxbtn')?.textContent`), 'npcs', await p.evaluate('window.__bagverse.crowd.list.length'));
+console.log('boot glbs', JSON.stringify(glbs));
+console.log('blur', await p.evaluate(`getComputedStyle(document.querySelector('.sk-panel')).backdropFilter`));
+console.log('thumbs', await p.evaluate(`[...document.querySelectorAll('.sk-card img')].filter(i=>i.src.startsWith('data:image/webp')).length`));
+await p.screenshot({ path: '/tmp/claude-0/mob_open.png' });
+// pick a skin that wasn't downloaded at boot
+const pick = await p.evaluate(`(()=>{const ids=['goldenking','maria','shiba','queen','witch','pepe','santa','undead'];const s=window.__bagverse.skins;const id=ids.find(i=>!s.chars[i]);document.querySelector('[data-skin="'+id+'"]').click();return [id, document.getElementById('sk-equip').textContent, document.getElementById('sk-stage').dataset.lock]})()`);
+console.log('picked (not loaded)', JSON.stringify(pick));
+await p.waitForFunction(`!!window.__bagverse.skins.chars['${pick[0]}']`, null, { timeout: 600000 });
+await p.evaluate('new Promise(r=>setTimeout(r,500))');
+const f0 = await p.evaluate('window.__frames'); await p.waitForFunction(`window.__frames > ${f0 + 3}`, null, { timeout: 600000 });
+console.log('after load', await p.evaluate(`document.getElementById('sk-equip').textContent`), 'glbs now', JSON.stringify(glbs.slice(-2)));
+await p.screenshot({ path: '/tmp/claude-0/mob_loaded.png' });
+await p.tap('#sk-equip');
+const f1 = await p.evaluate('window.__frames'); await p.waitForFunction(`window.__frames > ${f1 + 3}`, null, { timeout: 600000 });
+console.log('equipped', JSON.stringify(await p.evaluate(`[window.__bagverse.player.c.charId, window.__bagverse.skins.isOpen]`)));
+// texture cap check on the player's model
+console.log('max player texture', await p.evaluate(`(()=>{let m=0;window.__bagverse.player.c.model.traverse(o=>{if(o.isMesh){for(const k of ['map','normalMap']){const t=o.material[k];if(t&&t.image)m=Math.max(m,t.image.width)}}});return m})()`));
+await p.screenshot({ path: '/tmp/claude-0/mob_game.png' });
+await b.close();

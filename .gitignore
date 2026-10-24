@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+.env.local
+.vercel
+blender/king_fixed.glb
+*.log

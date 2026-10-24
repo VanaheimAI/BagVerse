@@ -1,0 +1,17 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+const p = await b.newPage({ viewport: { width: 640, height: 360 } });
+p.on('pageerror', (e) => console.log('[pageerror]', e.message));
+await p.goto('http://localhost:4173/?autostart&fixeddt=0.1&q=low&unlockall');
+await p.waitForFunction('window.__ready && window.__frames > 3', null, { timeout: 900000 });
+const frames = async (n) => { const f0 = await p.evaluate('window.__frames'); await p.waitForFunction(`window.__frames > ${f0 + n}`, null, { timeout: 900000, polling: 300 }); };
+await p.mouse.click(320, 180); await frames(3);
+console.log('ctx', await p.evaluate(() => window.__bagverse.sfx.ctx?.state), 'failed (no files yet)', await p.evaluate(() => window.__bagverse.sfx.failed.size));
+await p.keyboard.down('KeyW'); await frames(10);
+console.log('walking loops', await p.evaluate(() => JSON.stringify(Object.fromEntries(Object.entries(window.__bagverse.sfx.loops).map(([k, l]) => [k, +l.g.gain.value.toFixed(3)])))));
+await p.keyboard.up('KeyW');
+for (const n of ['click', 'levelup', 'coin', 'tier', 'gift', 'poof', 'scratch', 'error', 'jump', 'achieve']) await p.evaluate((n) => window.__bagverse.sfx.play(n), n);
+await p.evaluate(() => window.__bagverse.summonScooter()); await p.keyboard.down('KeyW'); await frames(12);
+console.log('riding loops', await p.evaluate(() => JSON.stringify(Object.fromEntries(Object.entries(window.__bagverse.sfx.loops).map(([k, l]) => [k, +l.g.gain.value.toFixed(3)])))));
+console.log('mute', await p.evaluate(() => { document.getElementById('soundbtn').click(); return document.getElementById('soundbtn').textContent + ' ' + window.__bagverse.sfx.settings.muted; }));
+await b.close(); console.log('done');

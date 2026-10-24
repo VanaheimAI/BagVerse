@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const p = await (await b.newContext({ viewport: { width: 640, height: 360 } })).newPage();
+await p.goto('http://localhost:4173/?autostart&fixeddt=0.1&unlockall&q=low');
+await p.waitForFunction('window.__ready && window.__frames > 3', null, { timeout: 900000 });
+console.log(await p.evaluate(() => { const B = window.__bagverse, ph = B.world.physics, g = ph.mesh.geometry; const o = ['tris ' + g.index.count / 3 + ' verts ' + g.attributes.position.count];
+  for (const [x, z] of [[0, 0], [0, -18], [44, -22], [46.3, -22], [36, -22], [130, 140], [110, 120], [-50, 23]]) o.push(`${x},${z}: ${ph.groundAt(x, z, 10).toFixed(2)} / from40 ${ph.groundAt(x, z, 40).toFixed(2)}`);
+  g.computeBoundingBox(); o.push('bbox ' + g.boundingBox.min.toArray().map((v) => v.toFixed(1)) + ' / ' + g.boundingBox.max.toArray().map((v) => v.toFixed(1)));
+  const pa = g.attributes.position; o.push('first verts ' + [0, 1, 2, 30000, 55000].map((i) => [pa.getX(i), pa.getY(i), pa.getZ(i)].map((v) => v.toFixed(1)).join(',')).join(' | ')); o.push('index max ' + Math.max(...g.index.array.slice(0, 1000)) + ' type ' + g.index.array.constructor.name + ' nan ' + [...pa.array].some((v) => !isFinite(v)));
+  const f = B.vaultFront('rwa_vault'); o.push('front ' + f.toArray().map((v) => v.toFixed(1)));
+  return o.join('\n'); }));
+await b.close();

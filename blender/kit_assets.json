@@ -1,0 +1,249 @@
+{
+ "Eco_Building_Grid": {
+  "kind": "building",
+  "size": [
+   30.855,
+   18.481,
+   51.737
+  ]
+ },
+ "Eco_Building_Slope": {
+  "kind": "building",
+  "size": [
+   19.238,
+   38.496,
+   57.386
+  ]
+ },
+ "Eco_Building_Terrace": {
+  "kind": "building",
+  "size": [
+   19.088,
+   38.205,
+   24.412
+  ]
+ },
+ "Regular_Building_TwistedTower_Large": {
+  "kind": "building",
+  "size": [
+   29.884,
+   22.898,
+   53.175
+  ]
+ },
+ "Spotlight_01": {
+  "kind": "pole",
+  "size": [
+   0.443,
+   3.188,
+   8.305
+  ],
+  "arm": [
+   -0.0,
+   -2.063
+  ],
+  "reach": 3.071
+ },
+ "Spotlight_02": {
+  "kind": "pole",
+  "size": [
+   2.759,
+   2.759,
+   7.103
+  ],
+  "arm": [
+   0.0,
+   0.0
+  ],
+  "reach": 1.379
+ },
+ "traffic_light_001": {
+  "kind": "pole",
+  "size": [
+   3.992,
+   0.403,
+   5.876
+  ],
+  "arm": [
+   2.875,
+   -0.062
+  ],
+  "reach": 3.894
+ },
+ "traffic_light_002": {
+  "kind": "pole",
+  "size": [
+   4.735,
+   0.739,
+   5.876
+  ],
+  "arm": [
+   -2.378,
+   -0.01
+  ],
+  "reach": 3.894
+ },
+ "traffic_light_003": {
+  "kind": "pole",
+  "size": [
+   0.885,
+   0.195,
+   3.683
+  ],
+  "arm": [
+   0.158,
+   0.003
+  ],
+  "reach": 0.535
+ },
+ "Car_06": {
+  "kind": "car",
+  "size": [
+   2.531,
+   3.691,
+   1.731
+  ],
+  "nose": -1
+ },
+ "Car_13": {
+  "kind": "car",
+  "size": [
+   2.311,
+   4.542,
+   1.363
+  ],
+  "nose": -1
+ },
+ "Car_16": {
+  "kind": "car",
+  "size": [
+   2.176,
+   4.131,
+   1.478
+  ],
+  "nose": -1
+ },
+ "Car_19": {
+  "kind": "car",
+  "size": [
+   1.802,
+   3.674,
+   1.647
+  ],
+  "nose": -1
+ },
+ "Futuristic_Car_1": {
+  "kind": "car",
+  "size": [
+   2.387,
+   4.623,
+   1.663
+  ],
+  "nose": -1
+ },
+ "Van": {
+  "kind": "car",
+  "size": [
+   2.295,
+   5.068,
+   2.951
+  ],
+  "nose": -1
+ },
+ "Bush_06": {
+  "kind": "prop",
+  "size": [
+   1.58,
+   1.607,
+   1.981
+  ]
+ },
+ "Bush_07": {
+  "kind": "prop",
+  "size": [
+   1.58,
+   1.607,
+   1.981
+  ]
+ },
+ "Bush_10": {
+  "kind": "prop",
+  "size": [
+   1.985,
+   0.988,
+   1.0
+  ]
+ },
+ "Palm_03": {
+  "kind": "prop",
+  "size": [
+   7.781,
+   7.818,
+   22.673
+  ]
+ },
+ "Fountain_03": {
+  "kind": "prop",
+  "size": [
+   5.886,
+   6.049,
+   4.235
+  ]
+ },
+ "Bus_Stop_02": {
+  "kind": "prop",
+  "size": [
+   4.664,
+   1.985,
+   2.499
+  ]
+ },
+ "Signboard_01": {
+  "kind": "prop",
+  "size": [
+   3.174,
+   0.553,
+   5.665
+  ]
+ },
+ "Trash_Can_04": {
+  "kind": "prop",
+  "size": [
+   2.085,
+   1.195,
+   1.645
+  ]
+ },
+ "Trash_Can_06": {
+  "kind": "prop",
+  "size": [
+   1.146,
+   1.162,
+   1.213
+  ]
+ },
+ "Trash_Can_07": {
+  "kind": "prop",
+  "size": [
+   2.096,
+   1.12,
+   1.645
+  ]
+ },
+ "Trash_Can_08": {
+  "kind": "prop",
+  "size": [
+   1.14,
+   1.14,
+   1.21
+  ]
+ },
+ "Trash_06": {
+  "kind": "prop",
+  "size": [
+   2.163,
+   0.592,
+   1.242
+  ]
+ }
+}

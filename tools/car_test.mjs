@@ -1,0 +1,28 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const p = await b.newPage({ viewport: { width: 960, height: 540 } });
+p.on('pageerror', (e) => console.log('[pageerror]', e.message));
+p.on('console', (m) => { if (/vision|error/i.test(m.text())) console.log('[console]', m.text().slice(0, 200)); });
+await p.addInitScript(() => { localStorage.setItem('bagverse.q', 'low'); localStorage.setItem('bagverse.char', 'goldenking'); });
+await p.goto('http://localhost:4173/?autostart&fixeddt=0.05&q=low');
+await p.waitForFunction('window.__ready && window.__frames > 3', null, { timeout: 900000 }); console.log('ready');
+const frames = async (n) => { const f0 = await p.evaluate('window.__frames'); await p.waitForFunction(`window.__frames > ${f0 + n}`, null, { timeout: 900000, polling: 500 }); };
+const st = () => p.evaluate(() => { const B = window.__bagverse, c = B.car; const w = c.wheels[0]; return { pos: c.pos.toArray().map((v) => +v.toFixed(2)), h: +c.h.toFixed(2), v: +c.v.toFixed(2), kmh: c.kmh, steer: +c.steer.toFixed(2), pitch: +c.pitch.toFixed(3), driving: c.driving, spinQ: w.spin.quaternion.toArray().map((v) => +v.toFixed(2)), player: B.player.body.pos.toArray().map((v) => +v.toFixed(2)), prompt: document.getElementById('prompt').textContent, speedo: document.getElementById('speed').textContent }; });
+console.log('parked', JSON.stringify(await st()));
+// walk the player next to the car, look at it
+await p.evaluate(() => { const B = window.__bagverse, c = B.car, t = c.local(2.6, 1.2); B.player.teleport(t.setY(c.pos.y + 0.1)); window.__camOverride = { pos: [c.local(6.5, 5).x, c.pos.y + 2.4, c.local(6.5, 5).z], at: [c.pos.x, c.pos.y + 0.6, c.pos.z] }; });
+await frames(4);
+console.log('near', JSON.stringify(await st()));
+await p.screenshot({ path: '/tmp/claude-0/car_parked.png', timeout: 900000 });
+await p.evaluate(() => { window.__camOverride = null; });
+await p.keyboard.press('KeyE'); await frames(2);
+console.log('entered', JSON.stringify(await st()));
+await p.keyboard.down('KeyW'); await frames(40); console.log('throttle 2s', JSON.stringify(await st()));
+await p.keyboard.down('KeyD'); await frames(20); await p.keyboard.up('KeyD'); console.log('right turn 1s', JSON.stringify(await st()));
+await frames(30); console.log('more', JSON.stringify(await st()));
+await p.screenshot({ path: '/tmp/claude-0/car_drive.png', timeout: 900000 });
+await frames(80); console.log('long', JSON.stringify(await st()));
+await p.keyboard.up('KeyW'); await p.keyboard.down('Space'); await frames(30); await p.keyboard.up('Space'); console.log('braked', JSON.stringify(await st()));
+await p.keyboard.press('KeyE'); await frames(3); console.log('exited', JSON.stringify(await st()), 'visible', await p.evaluate('window.__bagverse.player.root.visible'));
+await p.screenshot({ path: '/tmp/claude-0/car_exit.png', timeout: 900000 });
+await b.close();

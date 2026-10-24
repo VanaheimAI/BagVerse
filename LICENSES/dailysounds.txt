@@ -1,0 +1,5 @@
+Sound effects from DailySounds.org (https://dailysounds.org/license)
+Free for personal and commercial projects, including games and apps; editing allowed (trim, loop, pitch).
+Attribution optional ("Sound effects from DailySounds.org"), credited on the loading screen.
+Not allowed: selling / sharing / re-uploading the raw files on their own or as a sound pack.
+Files in public/sfx/ are trimmed, mono, re-encoded copies used only inside the game; see src/audio.js SLOTS for sources.
