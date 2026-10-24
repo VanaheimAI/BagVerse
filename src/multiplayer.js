@@ -161,16 +161,16 @@ export class Multiplayer {
 
   /** joined / left: a toast and a chat line for everyone in the world (each page announces what its room shows) */
   announce(name, joined) {
-    if (!this.started) { this.pending = [...(this.pending || []), [name, joined]]; return; }   // people already here when we arrive: one summary line instead
+    if (!this.started || performance.now() - this.startedAt < 6000) { if (joined) (this.pending ||= []).push(name); return; }   // already here when we arrived: one summary line
     this.hud.toast?.(joined ? `👋 ${name.toUpperCase()} JOINED · FOLLOW THEIR MARKER OR PRESS M` : `${name.toUpperCase()} LEFT`);
     this.hud.chat('SYSTEM', 'BagVerse', joined ? `${name} joined BagVerse 👋` : `${name} left BagVerse`, joined ? '#3dfff0' : '#9aa7b5');
   }
   // ---------------------------------------------------------------- per frame
   tick(dt) {
-    if (!this.started) {   // first frame in the world: say who is already here
-      this.started = true;
-      const here = (this.pending || []).filter(([, j]) => j).map(([n]) => n); this.pending = null;
-      if (here.length) this.hud.chat('SYSTEM', 'BagVerse', `Already here: ${here.slice(0, 6).join(', ')}${here.length > 6 ? ` +${here.length - 6}` : ''} (markers on screen, names on the map)`, '#3dfff0');
+    if (!this.started) { this.started = true; this.startedAt = performance.now(); }
+    if (this.pending && performance.now() - this.startedAt >= 6000) {   // the room has settled: say who was already here
+      const here = [...new Set(this.pending)].filter((n) => [...this.remotes.values()].some((r) => this.displayName(r) === n || r.p.n === n)); this.pending = null;
+      if (here.length) this.hud.chat('SYSTEM', 'BagVerse', `Already here: ${here.slice(0, 6).join(', ')}${here.length > 6 ? ` +${here.length - 6}` : ''} (follow the markers, or press M)`, '#3dfff0');
     }
     this.push();
     const k = 1 - Math.exp(-12 * dt);
