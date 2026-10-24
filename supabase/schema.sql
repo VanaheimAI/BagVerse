@@ -54,3 +54,48 @@ create policy "wallets read" on public.wallets for select using (true);
 -- players can unlink (delete their own row); creating or changing rows is server-only (no insert/update policy)
 drop policy if exists "wallets delete own" on public.wallets;
 create policy "wallets delete own" on public.wallets for delete to authenticated using (user_id = auth.uid()::text);
+
+-- ---------------------------------------------------------------- vault raffles (Oct 24)
+-- Wano (graded One Piece) and Kanto (graded Pokémon) raffles. Free entry, one per player and per verified wallet,
+-- written only by the server (api/raffle/enter). The draw (api/raffle/draw, Vercel cron Sundays 20:05 UTC) picks
+-- the winner from the first Solana block at/after draws_at: sha256(blockhash + ':' + id) mod entries.
+-- Add raffles in the Table Editor: id, vault ('wano' | 'kanto'), prize (json: name, set, grader, grade, cert, image,
+-- url, mint), min_level, draws_at.
+create table if not exists public.raffles (
+  id              text primary key,
+  vault           text not null check (vault in ('wano', 'kanto')),
+  prize           jsonb not null default '{}',
+  min_level       integer not null default 0,
+  draws_at        timestamptz not null,
+  status          text not null default 'open' check (status in ('open', 'drawn')),
+  entries         integer not null default 0,
+  winner_user     text,
+  winner_address  text,
+  winner_name     text,
+  proof           jsonb,
+  created_at      timestamptz not null default now()
+);
+create table if not exists public.raffle_entries (
+  raffle_id   text not null references public.raffles(id) on delete cascade,
+  user_id     text not null,
+  address     text not null,
+  name        text,
+  created_at  timestamptz not null default now(),
+  primary key (raffle_id, user_id),
+  unique (raffle_id, address)
+);
+alter table public.raffles enable row level security;
+alter table public.raffle_entries enable row level security;
+drop policy if exists "raffles read" on public.raffles;
+create policy "raffles read" on public.raffles for select using (true);
+drop policy if exists "raffle entries read" on public.raffle_entries;
+create policy "raffle entries read" on public.raffle_entries for select using (true);
+-- no insert/update/delete policies: only the server writes
+
+-- first two raffles, drawn this coming Sunday 20:00 UTC
+insert into public.raffles (id, vault, prize, min_level, draws_at) values
+  ('wano-1', 'wano', '{"name":"Monkey D. Luffy","set":"One Piece OP13 · Carrying on His Will #118","grader":"PSA","grade":"10","variant":"Alternate Art","cert":"146575703","mint":"inuRTqXX15NQAS48xZaHgFT4tCV4kdwrHisUhBkTZdD","url":"https://collectorcrypt.com/assets/solana/inuRTqXX15NQAS48xZaHgFT4tCV4kdwrHisUhBkTZdD"}', 25,
+    date_trunc('week', now()) + interval '6 days 20 hours' + case when now() > date_trunc('week', now()) + interval '6 days 20 hours' then interval '7 days' else interval '0' end),
+  ('kanto-1', 'kanto', '{"name":"Graded Pokémon card · TBA"}', 100,
+    date_trunc('week', now()) + interval '6 days 20 hours' + case when now() > date_trunc('week', now()) + interval '6 days 20 hours' then interval '7 days' else interval '0' end)
+on conflict (id) do nothing;

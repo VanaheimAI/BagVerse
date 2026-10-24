@@ -31,5 +31,11 @@
         }
       ]
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/raffle/draw",
+      "schedule": "5 20 * * 0"
+    }
   ]
 }

@@ -36,6 +36,7 @@ import { Multiplayer } from './multiplayer.js';
 import { Leaderboard } from './leaderboard.js';
 import { Wallet, short as shortAddr, MOBILE as WALLET_MOBILE } from './wallet.js';
 import { NFT_GATES, gateFor } from './nft-gates.js';
+import { Raffles, countdown } from './raffles.js';
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 const $ = (id) => document.getElementById(id);
@@ -828,30 +829,68 @@ function mapMarks() {
 }
 
 // ---------------------------------------------------------------- vaults (raffles)
+const raffles = new Raffles();
+const escR = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+raffles.onDrawn = (r, mine) => {
+  const vault = r.vault === 'wano' ? 'WANO VAULT' : 'KANTO VAULT', prize = r.prize?.name || 'graded card';
+  if (mine) {
+    sfx.play('achieve');
+    hud.modal(`🏆 YOU WON THE ${vault} RAFFLE!`, `
+      <p>Your entry was drawn for <b>${escR(prize)}</b>${r.prize?.grade ? ` (${escR(r.prize.grader || '')} ${escR(r.prize.grade)})` : ''}.</p>
+      <div class="row"><span>Your wallet</span><b class="wl-addr">${escR(shortAddr(r.winner_address))}</b></div>
+      <div class="row"><span>Entries</span><b>${r.entries | 0}</b></div>
+      <p style="opacity:.8">The BagVerse team will send the prize to this verified wallet. Keep it linked until it arrives.</p>`);
+  } else if (r.winner_name && Date.now() - Date.parse(r.draws_at) < 3 * 86400e3) {
+    hud.chat('SYSTEM', vault, `${r.winner_name} won ${prize} (${r.entries | 0} entries).`, '#ffc83d');
+  }
+};
+raffles.start();
 function openVault(zid, label) {
-  const L = progress.s.level, onepiece = zid === 'rwa_vault';
-  const need = onepiece ? 25 : 100, ok = L >= need || Progress.unlockAll;
-  const a = onepiece ? RWA_ASSETS[0] : null;
-  sfx.play(ok ? 'scanok' : 'scandeny');
-  hud.modal(`${label} · ${onepiece ? 'ONE PIECE' : 'POKÉMON'} RAFFLES`, `
-    ${a ? `<div class="rwa">
-      <img src="${a.photo || a.image}" alt="${a.name} ${a.grader} ${a.grade}" referrerpolicy="no-referrer" onerror="this.remove()">
+  const L = progress.s.level, onepiece = zid === 'rwa_vault', vault = onepiece ? 'wano' : 'kanto';
+  const r = raffles.current(vault), last = raffles.last(vault);
+  const need = r ? r.min_level | 0 : onepiece ? 25 : 100, lvOk = L >= need || Progress.unlockAll;
+  const pz = r?.prize || {}, local = RWA_ASSETS.find((x) => x.mint && x.mint === pz.mint);
+  const img = local?.photo || pz.image || null;
+  sfx.play(lvOk ? 'scanok' : 'scandeny');
+  const prizeHtml = r ? `<div class="rwa">
+      ${img ? `<img src="${escR(img)}" alt="${escR(pz.name)}" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
       <div>
-        <div class="rwa-k">FEATURED RAFFLE · ${a.issuer.toUpperCase()}</div>
-        <div class="rwa-t">${a.year} #${a.number} ${a.name}</div>
-        <div class="row"><span>Set</span><b>${a.set}</b></div>
-        <div class="row"><span>Grade</span><b>${a.grader} ${a.grade} · Gem Mint</b></div>
-        ${a.variant ? `<div class="row"><span>Variant</span><b>${a.variant}</b></div>` : ''}
-        ${a.cert ? `<div class="row"><span>Cert</span><b>${a.grader} #${a.cert}</b></div>` : ''}
-        <div class="row"><span>Mint</span><b title="${a.mint}">${shortMint(a.mint)}</b></div>
-        <a class="rwa-link" href="${a.url}" target="_blank" rel="noopener noreferrer">VIEW ON ${a.issuer.toUpperCase()} ↗</a>
-      </div></div>` : `<p>Graded <b>Pokémon</b> card raffles. This week's slabs are being vaulted; the line-up is announced here and on the hologram showcases out front.</p>`}
-    <div class="row"><span>Vault</span><b>${onepiece ? 'Graded One Piece cards' : 'Graded Pokémon cards'}</b></div>
-    <div class="row"><span>More prizes</span><b>${onepiece ? '2 more graded slabs · TBA' : '3 graded slabs · TBA'}</b></div>
-    <div class="row"><span>Draw</span><b>Sundays 20:00 UTC</b></div>
-    <div class="row"><span>Entry</span><b style="color:${ok ? '#7cff3d' : '#ff6b6b'}">${ok ? `OPEN AT LV ${need}+` : `LV ${need}+ · ${need - L} LEVEL${need - L === 1 ? '' : 'S'} TO GO`}</b></div>
-    <p style="opacity:.75">Prizes are real vaulted cards on Solana (display only for now). Raffle entry and escrow arrive with the blockchain phase.</p>
-    <button disabled style="opacity:.5">ENTER RAFFLE (SOON)</button>`);
+        <div class="rwa-k">THIS WEEK'S RAFFLE${local ? ' · ' + local.issuer.toUpperCase() : ''}</div>
+        <div class="rwa-t">${escR(pz.name || 'Graded card · TBA')}</div>
+        ${pz.set ? `<div class="row"><span>Set</span><b>${escR(pz.set)}</b></div>` : ''}
+        ${pz.grade ? `<div class="row"><span>Grade</span><b>${escR(pz.grader || '')} ${escR(pz.grade)}</b></div>` : ''}
+        ${pz.variant ? `<div class="row"><span>Variant</span><b>${escR(pz.variant)}</b></div>` : ''}
+        ${pz.cert ? `<div class="row"><span>Cert</span><b>${escR(pz.grader || '')} #${escR(pz.cert)}</b></div>` : ''}
+        ${pz.mint ? `<div class="row"><span>Mint</span><b title="${escR(pz.mint)}">${escR(shortMint(pz.mint))}</b></div>` : ''}
+        ${/^https:\/\//.test(pz.url || '') ? `<a class="rwa-link" href="${escR(pz.url)}" target="_blank" rel="noopener noreferrer">VIEW THE CARD ↗</a>` : ''}
+      </div></div>` : `<p>${raffles.offline ? 'Raffles run on the BagVerse website (bag-verse-ten.vercel.app).' : raffles.ready ? `No ${onepiece ? 'One Piece' : 'Pokémon'} raffle is open right now. The next slab is announced here.` : 'Loading raffles…'}</p>`;
+  const w = wallet.status === 'verified', entered = r && raffles.entered(r.id);
+  let action = '';
+  if (r) {
+    if (!lvOk) action = `<button disabled style="opacity:.5">LOCKED · LV ${need}+ (${need - L} TO GO)</button>`;
+    else if (entered) action = `<button disabled class="rf-in">ENTERED ✓</button>`;
+    else if (!w) action = `<button id="rf-wallet">CONNECT WALLET TO ENTER</button>`;
+    else action = `<button id="rf-enter">ENTER FREE</button>`;
+  }
+  const lastHtml = last ? `<div class="rf-last"><small>LAST DRAW · ${escR(last.prize?.name || '')}</small>
+      <div class="row"><span>Winner</span><b>${last.winner_name ? `${escR(last.winner_name)} · ${escR(shortAddr(last.winner_address))}` : 'No entries'}</b></div>
+      ${last.proof?.blockhash ? `<div class="row"><span>Drawn from</span><b><a href="https://solscan.io/block/${last.proof.slot | 0}" target="_blank" rel="noopener">Solana block #${(last.proof.slot | 0).toLocaleString()} ↗</a></b></div>` : ''}</div>` : '';
+  hud.modal(`${label} · ${onepiece ? 'ONE PIECE' : 'POKÉMON'} RAFFLE`, `
+    ${prizeHtml}
+    ${r ? `<div class="row"><span>Draw</span><b id="rf-count">${countdown(Date.parse(r.draws_at) - Date.now())}</b></div>
+    <div class="row"><span>Entries</span><b>${r.entries | 0}</b></div>
+    <div class="row"><span>Entry</span><b style="color:${lvOk ? '#7cff3d' : '#ff6b6b'}">FREE · one per verified wallet · LV ${need}+</b></div>
+    ${action}<p class="wl-err" id="rf-err" hidden></p>` : ''}
+    ${lastHtml}
+    <p style="opacity:.7;font-size:13px">The winner is picked from the hash of the first Solana block after the draw time, so anyone can check it. Prizes go to the winner's verified wallet.</p>`);
+  const cd = $('rf-count');
+  if (cd && r) { const iv = setInterval(() => { if (!document.body.contains(cd)) return clearInterval(iv); cd.textContent = countdown(Date.parse(r.draws_at) - Date.now()); }, 1000); }
+  if ($('rf-wallet')) $('rf-wallet').onclick = () => openWallet();
+  if ($('rf-enter')) $('rf-enter').onclick = async () => {
+    const b = $('rf-enter'); b.disabled = true; b.textContent = 'ENTERING…';
+    try { await raffles.enter(r.id, progress.s.name); sfx.play('success'); hud.toast(`RAFFLE ENTERED · ${(pz.name || 'GRADED CARD').toUpperCase()}`); openVault(zid, label); }
+    catch (e) { b.disabled = false; b.textContent = 'ENTER FREE'; const er = $('rf-err'); if (er) { er.textContent = e.message; er.hidden = false; } }
+  };
 }
 
 // ---------------------------------------------------------------- RWA kiosks
@@ -993,7 +1032,7 @@ const syncHolder = () => {
 wallet.onChange(syncHolder); syncHolder();
 const openSkins = () => { sfx.play('whoosh'); $('loader').hidden = true; $('hud').hidden = true; $('emotewheel').hidden = true; hud.closeModal(); skins.open(); };
 if (params.has('autostart')) start(); else openSkins();
-window.__bagverse = { tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
+window.__bagverse = { raffles, openVault, tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
 
 // slow-frame guard: after a short warm-up, a few seconds under ~22 fps sheds the heaviest effects live
 // and remembers the lower tier for next time

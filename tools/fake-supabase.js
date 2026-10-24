@@ -24,15 +24,17 @@ export function createClient() {
     };
     return ch;
   }
-  // `wallets` lives on the test server (tools/wallet_server.mjs), like the real table the API writes
+  // server-side tables (wallets, raffles, raffle_entries) live on the test server (tools/wallet_server.mjs), like the
+  // real tables the API writes
   const xhr = (method, url, body) => { const x = new XMLHttpRequest(); x.open(method, url, false); x.send(body ? JSON.stringify(body) : null); try { return JSON.parse(x.responseText); } catch (_) { return []; } };
+  const SERVER = new Set(['wallets', 'raffles', 'raffle_entries']);
   function from(name) {
-    if (name === 'wallets') {
-      const eqs = []; let del = false;
-      const run = () => xhr('GET', '/__fake/wallets').filter((r) => eqs.every(([c, v]) => r[c] === v));
-      const w = { select: () => w, eq: (c, v) => (eqs.push([c, v]), w), delete: () => ((del = true), w),
+    if (SERVER.has(name)) {
+      const eqs = []; let del = false, ord = null, lim = 1000;
+      const run = () => { let r = xhr('GET', '/__fake/t/' + name).filter((x) => eqs.every(([c, v]) => x[c] === v)); if (ord) r.sort((a, b) => (ord.asc ? 1 : -1) * (a[ord.c] < b[ord.c] ? -1 : a[ord.c] > b[ord.c] ? 1 : 0)); return r.slice(0, lim); };
+      const w = { select: () => w, eq: (c, v) => (eqs.push([c, v]), w), order: (c, o = {}) => ((ord = { c, asc: o.ascending !== false }), w), limit: (n) => ((lim = n), w), delete: () => ((del = true), w),
         maybeSingle: async () => ({ data: run()[0] || null, error: null }),
-        then: (res, rej) => { if (del) { if (eqs.some(([c, v]) => c === 'user_id' && v === uid)) xhr('POST', '/__fake/wallets/delete', { user_id: uid }); return Promise.resolve({ error: null }).then(res, rej); } return Promise.resolve({ data: run(), error: null }).then(res, rej); } };
+        then: (res, rej) => { if (del) { if (name === 'wallets' && eqs.some(([c, v]) => c === 'user_id' && v === uid)) xhr('POST', '/__fake/t/wallets/delete', { user_id: uid }); return Promise.resolve({ error: null }).then(res, rej); } return Promise.resolve({ data: run(), error: null }).then(res, rej); } };
       return w;
     }
     const q = { eqs: [], ord: null, lim: 1000 };

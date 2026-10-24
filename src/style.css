@@ -702,3 +702,9 @@ body.touch #hud.menu-open #walletbtn { display: block; }
 .wl-addr { font-family: ui-monospace, monospace; }
 .wl-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .wl-btn { display: inline-flex; align-items: center; padding: 0 14px; border-radius: 8px; border: 1px solid var(--edge); color: #fff; text-decoration: none; font: 700 14px "Rajdhani", sans-serif; letter-spacing: 1px; }
+
+/* ===== vault raffles ===== */
+#modal .rf-in { background: rgba(124,255,61,.15); color: #7cff3d; border: 1px solid #7cff3d; opacity: 1; cursor: default; }
+.rf-last { margin-top: 12px; padding: 8px 12px; border-radius: 10px; background: rgba(255,200,61,.07); border: 1px solid rgba(255,200,61,.35); }
+.rf-last small { display: block; font-size: 11px; letter-spacing: 1.5px; color: #ffc83d; margin-bottom: 4px; }
+.rf-last a { color: #3dfff0; }

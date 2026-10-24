@@ -14,7 +14,7 @@ p.on('pageerror', (e) => console.log('[pageerror]', e.message));
 p.on('console', (m) => { if (/wallet|error/i.test(m.text()) && !/favicon/.test(m.text())) console.log('[console]', m.text().slice(0, 160)); });
 const go = async () => { await p.goto(URL0, { timeout: 900000, waitUntil: 'commit' }); await p.waitForFunction('window.__ready && window.__frames > 3 && window.__bagverse.wallet.ready', null, { timeout: 900000 }); };
 const st = () => p.evaluate(() => { const W = window.__bagverse.wallet; return `${W.status} skins=${JSON.stringify(W.skins)} pepeOwned=${window.__bagverse.skins.skin('pepe').owned}`; });
-const rows = () => p.evaluate(() => fetch('/__fake/wallets').then((r) => r.json()).then((r) => r.map((x) => `${x.user_id}:${x.address.slice(0, 6)}:[${x.skins}]`).join(' ')));
+const rows = () => p.evaluate(() => fetch('/__fake/t/wallets').then((r) => r.json()).then((r) => r.map((x) => `${x.user_id}:${x.address.slice(0, 6)}:[${x.skins}]`).join(' ')));
 const shot = (n) => p.screenshot({ path: `/tmp/claude-0/${n}.png`, timeout: 600000 });
 await go();
 await p.evaluate(() => { const B = window.__bagverse; B.progress.s.name = 'Ada'; B.progress.s.nameSet = true; });
