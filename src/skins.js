@@ -366,6 +366,7 @@ export class SkinScreen {
         <div class="sk-rotate">${ROTATE}<span>DRAG TO ROTATE</span><small>SCROLL / PINCH TO ZOOM</small></div>
       </div>
       <aside class="sk-info">
+        <label class="sk-player"><span>PLAYER NAME</span><input id="sk-pname" maxlength="16" placeholder="Enter your name" autocomplete="nickname" spellcheck="false" enterkeyhint="go" /></label>
         <div class="sk-k">SKIN INFO</div>
         <div class="sk-name" id="sk-name"></div>
         <span class="sk-pill" id="sk-pill"></span>
@@ -384,7 +385,6 @@ export class SkinScreen {
         </div>
       </section>
       <footer class="sk-actions">
-        <label class="sk-player"><span>PLAYER NAME</span><input id="sk-pname" maxlength="16" placeholder="Enter your name" autocomplete="nickname" spellcheck="false" enterkeyhint="go" /></label>
         <button class="sk-btn" id="sk-back">BACK</button><button class="sk-btn" id="sk-shop">SHOP</button><button class="sk-btn go" id="sk-equip">EQUIP SKIN</button>
       </footer>
       <div class="sk-toast" id="sk-toast"></div>`;

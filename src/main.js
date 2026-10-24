@@ -450,6 +450,7 @@ const mp = new Multiplayer({
     ride: veh && veh === scooter ? { x: veh.pos.x, y: veh.pos.y, z: veh.pos.z, h: veh.h, p: veh.pitch, o: veh.roll, sp: veh.v } : null,
   }),
 });
+hud.onGoToMate = (m) => mp.goTo(m.peer);
 mp.onGoTo = (p) => {
   if (veh) dismount();
   p.x += 1.6; p.y = world.physics.groundAt(p.x, p.z, p.y + 3) + 0.1;
@@ -477,7 +478,7 @@ hud.onEmote = (e) => { if (player.allow(e)) player.emote = e; };
 hud.onAction = (a) => {
   if (a === 'missions') { missionsUI.open(); return; }
   if (a === 'ride') { summonScooter(); return; }
-  if (a === 'map') hud.mapOpen ? hud.closeMap() : hud.openMap(player.body.pos);
+  if (a === 'map') hud.mapOpen ? hud.closeMap() : hud.openMap(player.body.pos, mp.mapMates());
   else if (a === 'emotes') $('emotewheel').hidden = !$('emotewheel').hidden;
   else if (a === 'inventory') inventory();
   else if (a === 'skins') openSkins();
@@ -884,7 +885,7 @@ function frame() {
 
   if (started) {
     if (input.hit('KeyK')) openSkins();
-    if (input.hit('KeyM')) hud.mapOpen ? hud.closeMap() : hud.openMap(player.body.pos);
+    if (input.hit('KeyM')) hud.mapOpen ? hud.closeMap() : hud.openMap(player.body.pos, mp.mapMates());
     if (input.hit('KeyI')) inventory();
     if (input.hit('KeyJ')) missionsUI.isOpen ? missionsUI.close() : missionsUI.open();
     if (input.hit('KeyG')) $('emotewheel').hidden = !$('emotewheel').hidden;
@@ -904,7 +905,7 @@ function frame() {
     if (started) flashmob();
     if (started && input.hit('KeyR')) summonScooter();
   }
-  if (started) { mp.tick(dt); raceFrame(); if ((frame.lbt = (frame.lbt || 0) + dt) > 30) { frame.lbt = 0; lb.tick(); } }
+  if (started) { mp.tick(dt); mp.indicators(camera, player.root.position); raceFrame(); if ((frame.lbt = (frame.lbt || 0) + dt) > 30) { frame.lbt = 0; lb.tick(); } }
   if (started && bagRun.active) bagRun.update(dt, player.body.pos);
   else if (started && progress.has('portals')) bagRun.warm(2);
   cam.update(dt, input, veh ? veh.pos : player.root.position);
@@ -928,7 +929,7 @@ function frame() {
       hud.zone(world.zoneAt(player.body.pos));
       hud.drawMinimap(player.body.pos, crowd.list, cam.yaw, car, mapMarks());
       missionsUI.updateTracker();
-      if (hud.mapOpen) hud.openMap(player.body.pos);
+      if (hud.mapOpen) hud.openMap(player.body.pos, mp.mapMates());
     }
     hud.update(dt);
   }

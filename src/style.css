@@ -642,23 +642,34 @@ body.touch #rh-board { top: calc(var(--t) + var(--mm, 76px) + 64px); right: var(
 .lb-mini div.me { color: #3dfff0; }
 @media (max-width: 600px) { .lb-row { grid-template-columns: 24px 1fr auto; } .lb-sub { display: none; } }
 
-/* ===== player name on the skin screen ===== */
-#skins .sk-player { display: flex; flex-direction: column; justify-content: center; gap: 2px; margin-right: 6px; }
-#skins .sk-player span { font-size: 11px; letter-spacing: 1.5px; color: #8fa3bb; font-weight: 700; }
-#skins .sk-player input { height: 40px; width: 210px; box-sizing: border-box; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(124,255,61,.55); background: rgba(6,10,16,.85);
+/* ===== player name on the skin screen (top of the Skin Info panel) ===== */
+#skins .sk-player { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid rgba(160,190,220,.15); }
+#skins .sk-player span { font-size: 11px; letter-spacing: 1.5px; color: #7cff3d; font-weight: 700; }
+#skins .sk-player input { height: 40px; width: 100%; box-sizing: border-box; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(124,255,61,.55); background: rgba(6,10,16,.85);
   color: #fff; font: 700 17px "Rajdhani", sans-serif; letter-spacing: .5px; outline: none; }
 #skins .sk-player input:focus { border-color: #7cff3d; box-shadow: 0 0 0 2px rgba(124,255,61,.25); }
 #skins .sk-player input::placeholder { color: #6f7f92; font-weight: 600; }
 #skins .sk-player input.bad { border-color: #ff4d6d; animation: skshake .35s; }
 @keyframes skshake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-@media (max-width: 760px) { #skins .sk-actions { flex-wrap: wrap; } #skins .sk-player { flex: 1 1 100%; margin: 0 0 4px; } #skins .sk-player input { width: 100%; } }
-body.touch #skins .sk-actions { flex-wrap: wrap; }
-body.touch #skins .sk-player { flex: 1 1 100%; margin: 0 0 2px; flex-direction: row; align-items: center; gap: 8px; }
-body.touch #skins .sk-player span { white-space: nowrap; }
+/* touch: the info panel is a strip, so the name row sits just above it */
+body.touch #skins { --namerow: 46px; }
+body.touch #skins .sk-info { overflow: visible; }
+body.touch #skins .sk-player { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); margin: 0; padding: 0; border: 0; flex-direction: row; align-items: center; gap: 8px; }
+body.touch #skins .sk-player span { white-space: nowrap; text-shadow: 0 1px 4px #000; }
 body.touch #skins .sk-player input { flex: 1; width: auto; height: 38px; font-size: 16px; }   /* 16px: no iOS zoom on focus */
-/* touch: room for the name row between the cards and the buttons */
-body.touch #skins { --namerow: 46px; --panel-b: calc(var(--b) + var(--act) + var(--namerow) + 10px); }
+body.touch #skins .sk-stage { bottom: calc(var(--strip-b) + var(--strip) + var(--namerow) + 4px); }
 @media (orientation: landscape) and (max-height: 540px) {
   body.touch #skins { --namerow: 44px; }
-  body.touch #skins .sk-panel { bottom: calc(var(--b) + var(--act) + var(--namerow) + 8px); }
+  body.touch #skins .sk-stage { bottom: calc(var(--b) + var(--strip) + var(--namerow) + 6px); }
 }
+
+/* ===== teammate markers (find each other) ===== */
+#mpmarks { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
+.mpmark { all: unset; position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 3px 8px 4px; border-radius: 9px; background: rgba(6,16,22,.72); border: 1px solid rgba(61,255,240,.7); color: #3dfff0; font: 700 13px "Rajdhani", sans-serif; letter-spacing: .5px; white-space: nowrap; }
+.mpmark[hidden] { display: none; }
+.mpmark i { font-style: normal; font-size: 11px; line-height: 1; display: none; }
+.mpmark.edge i { display: block; }
+.mpmark small { font-size: 11px; color: #c9f; opacity: .85; color: #cfefff; }
+.mpmark:hover { background: rgba(61,255,240,.2); }
+body.in-run .mpmark { opacity: .6; }

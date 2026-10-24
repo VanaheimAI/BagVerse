@@ -113,10 +113,17 @@ export class HUD {
     g.beginPath(); g.moveTo(0, -10); g.lineTo(7, 8); g.lineTo(0, 4); g.lineTo(-7, 8); g.closePath(); g.fill(); g.restore();
   }
 
-  openMap(player) {
+  openMap(player, mates = []) {
     $('bigmap').hidden = false;
     const g = $('bigmapcv').getContext('2d'), k = this.mapK;
     g.drawImage(this.mapLabeled, 0, 0);
+    this.mates = mates;
+    for (const m of mates) {   // teammates: cyan dot + name; click one to travel to them
+      const x = (m.x + 200) * k, y = (m.z + 200) * k;
+      g.fillStyle = '#3dfff0'; g.beginPath(); g.arc(x, y, 8, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#071018'; g.lineWidth = 2; g.stroke();
+      g.font = '700 20px Rajdhani, sans-serif'; g.textAlign = 'center'; g.lineWidth = 5; g.strokeStyle = 'rgba(0,0,0,.8)';
+      g.strokeText(m.name, x, y - 14); g.fillStyle = '#3dfff0'; g.fillText(m.name, x, y - 14);
+    }
     g.fillStyle = '#7cff3d'; g.beginPath(); g.arc((player.x + 200) * k, (player.z + 200) * k, 9, 0, Math.PI * 2); g.fill();
     g.strokeStyle = '#fff'; g.lineWidth = 3; g.stroke();
   }
@@ -125,6 +132,8 @@ export class HUD {
   mapClick(e) {
     const r = e.target.getBoundingClientRect();
     const x = ((e.clientX - r.left) / r.width) * 400 - 200, z = ((e.clientY - r.top) / r.height) * 400 - 200;
+    const mate = (this.mates || []).map((m) => [m, Math.hypot(m.x - x, m.z - z)]).sort((a, b) => a[1] - b[1])[0];
+    if (mate && mate[1] < 9) { this.closeMap(); this.onGoToMate?.(mate[0]); return; }   // click a teammate: go to them
     let best = null, bd = 1e9;
     for (const zn of this.world.zones) { const d = Math.hypot(zn.pos.x - x, zn.pos.z - z); if (d < bd) { bd = d; best = zn; } }
     if (best && bd < Math.max(best.radius, 25)) { this.closeMap(); this.onTravel?.(best); }

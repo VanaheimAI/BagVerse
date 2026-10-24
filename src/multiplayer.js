@@ -123,7 +123,7 @@ export class Multiplayer {
     const pr = peer.presence;
     let r = this.remotes.get(peer.peer);
     if (!r) { r = { peer: peer.peer, by: peer.by, guest: peer.guest, isMe: peer.isMe, p: {}, pos: new THREE.Vector3(), yaw: 0, holder: {}, born: performance.now(), sayI: pr.say?.i ?? null }; this.remotes.set(peer.peer, r);   // sayI: never replay a line said before we arrived
-      if (!peer.isMe) this.hud.toast?.(`${str(pr.n, 16) || 'A PLAYER'} JOINED`); }
+      if (!peer.isMe) this.hud.toast?.(`${str(pr.n, 16) || 'A PLAYER'} JOINED · FOLLOW THEIR MARKER OR PRESS M`); }
     const prev = r.p; r.p = pr; r.by = peer.by;
     r.target = new THREE.Vector3(num(pr.x, -400, 400), num(pr.y, -20, 200), num(pr.z, -400, 400));
     r.tyaw = num(pr.h, -50, 50);
@@ -154,7 +154,7 @@ export class Multiplayer {
   }
   drop(id, left = false) {
     const r = this.remotes.get(id); if (!r) return;
-    if (r.c) this.scene.remove(r.c.root); if (r.board) this.scene.remove(r.board);
+    if (r.c) this.scene.remove(r.c.root); if (r.board) this.scene.remove(r.board); r.mark?.remove();
     this.remotes.delete(id);
     if (left && !r.isMe) this.hud.toast?.(`${this.displayName(r).toUpperCase()} LEFT`);
   }
@@ -205,6 +205,40 @@ export class Multiplayer {
   tickBubble(r, dt) {
     const h = r.holder; if (!h.bubble) return;
     h.bubbleT -= dt; if (h.bubbleT <= 0) { r.c.root.remove(h.bubble); h.bubble.material.map?.dispose(); h.bubble = null; }
+  }
+
+  // ---------------------------------------------------------------- finding each other
+  /** teammates for the big map: [{ peer, x, z, name }] */
+  mapMates() { return [...this.remotes.values()].filter((r) => r.c && !r.isMe).map((r) => ({ peer: r.peer, x: r.pos.x, z: r.pos.z, name: this.displayName(r) })); }
+  goTo(peer) { const r = this.remotes.get(peer); if (r) this.onGoTo?.(r.pos.clone()); }
+  /** on-screen markers: a name + distance tag over each teammate, pinned to the screen edge with an arrow when they are
+   *  off-screen or behind you; hidden when they are close enough to see their nameplate */
+  indicators(camera, from) {
+    const box = this.ind ||= Object.assign(document.createElement('div'), { id: 'mpmarks' });
+    if (!box.isConnected) (document.getElementById('hud') || document.body).appendChild(box);
+    const W = innerWidth, H = innerHeight, pad = 46, seen = new Set(), v = new THREE.Vector3();
+    for (const r of this.remotes.values()) {
+      if (!r.c || r.isMe) continue;
+      seen.add(r.peer);
+      let el = r.mark;
+      if (!el) { el = r.mark = document.createElement('button'); el.className = 'mpmark'; el.innerHTML = '<i>▲</i><b></b><small></small>'; el.onclick = () => this.goTo(r.peer); box.appendChild(el); }
+      const d = r.pos.distanceTo(from);
+      if (d < 14) { el.hidden = true; continue; }
+      el.hidden = false;
+      v.copy(r.pos).setY(r.pos.y + 2.3).project(camera);
+      const behind = v.z > 1;
+      let x = (v.x * 0.5 + 0.5) * W, y = (-v.y * 0.5 + 0.5) * H;
+      if (behind) { x = W - x; y = H - pad; }
+      const off = behind || x < pad || x > W - pad || y < pad || y > H - pad;
+      x = Math.min(W - pad, Math.max(pad, x)); y = Math.min(H - pad, Math.max(pad, y));
+      el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+      el.classList.toggle('edge', off);
+      const ang = Math.atan2(y - H / 2, x - W / 2) + Math.PI / 2;
+      el.firstChild.style.transform = off ? `rotate(${ang}rad)` : 'none';
+      el.children[1].textContent = this.displayName(r).slice(0, 14);
+      el.children[2].textContent = d > 999 ? '' : Math.round(d) + ' m';
+    }
+    for (const r of [...box.children]) if (![...this.remotes.values()].some((x) => x.mark === r)) r.remove();
   }
 
   // ---------------------------------------------------------------- HUD
