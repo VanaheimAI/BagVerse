@@ -39,7 +39,7 @@ export class Leaderboard {
     this.unsub = [
       col.where('week', '==', wk).orderBy('wBest', 'desc').limit(25).onSnapshot(on('week'), err),
       col.where('day', '==', dk).orderBy('dBest', 'desc').limit(25).onSnapshot(on('day'), err),
-      col.orderBy('wins', 'desc').limit(25).onSnapshot(on('wins'), err),
+      col.where('wins', '>', 0).orderBy('wins', 'desc').limit(25).onSnapshot(on('wins'), err),   // only players with a win
     ];
   }
   /** call now and then: re-subscribes when the day or week rolls over */

@@ -26,9 +26,9 @@ export function createClient() {
   }
   function from(name) {
     const q = { eqs: [], ord: null, lim: 1000 };
-    const run = () => { let rows = Object.values(table()); for (const [c, v] of q.eqs) rows = rows.filter((r) => r[c] === v);
+    const run = () => { let rows = Object.values(table()); for (const [c, v] of q.eqs) rows = rows.filter((r) => r[c] === v); for (const [c, v] of q.gts || []) rows = rows.filter((r) => r[c] > v);
       if (q.ord) rows.sort((a, b) => (q.ord.asc ? 1 : -1) * ((a[q.ord.c] ?? 0) - (b[q.ord.c] ?? 0))); return rows.slice(0, q.lim); };
-    const api = { select() { return api; }, eq(c, v) { q.eqs.push([c, v]); return api; }, order(c, o) { q.ord = { c, asc: o.ascending }; return api; }, limit(n) { q.lim = n; return api; },
+    const api = { select() { return api; }, eq(c, v) { q.eqs.push([c, v]); return api; }, gt(c, v) { q.gts = [...(q.gts || []), [c, v]]; return api; }, order(c, o) { q.ord = { c, asc: o.ascending }; return api; }, limit(n) { q.lim = n; return api; },
       maybeSingle: async () => ({ data: run()[0] || null, error: null }),
       then(res, rej) { return Promise.resolve({ data: run(), error: null }).then(res, rej); },
       upsert: async (row) => { if (row.id !== uid) return { error: { message: 'new row violates row-level security policy' } }; const t = table(); t[row.id] = row; save(t); return { error: null }; } };

@@ -134,7 +134,7 @@ function makeDb(uid) {
     limit: (n) => query({ ...q, l: n }),
     async get() {
       let r = sb.from('lb').select('id, doc');
-      for (const [f, op, v] of q.w) if (op === '==' && COL[f]) r = r.eq(COL[f], v);
+      for (const [f, op, v] of q.w) { const c = COL[f]; if (!c) continue; r = op === '==' ? r.eq(c, v) : op === '>' ? r.gt(c, v) : op === '>=' ? r.gte(c, v) : op === '<' ? r.lt(c, v) : op === '<=' ? r.lte(c, v) : r; }
       if (q.o && COL[q.o[0]]) r = r.order(COL[q.o[0]], { ascending: q.o[1] !== 'desc', nullsFirst: false });
       r = r.limit(q.l || 100);
       const { data, error } = await r; if (error) throw { code: 'unavailable', message: error.message };
