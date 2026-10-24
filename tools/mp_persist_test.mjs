@@ -3,9 +3,11 @@
 // Also: chat, movement, presence calls within the 5-per-30-s limit, message rate, and a clean leave.
 import { chromium } from 'playwright';
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+// node tools/mp_persist_test.mjs [url]   (with a url: the live site and real Supabase, one browser profile per player)
+const LIVE = process.argv[2];
 const ctx = await b.newContext({ viewport: { width: 640, height: 360 } });
-const open = async (tag, extra = '') => { const p = await ctx.newPage(); p.on('pageerror', (e) => console.log(`[${tag} pageerror]`, e.message));
-  await p.goto('http://localhost:4174/?autostart&fixeddt=0.1&q=low' + extra, { timeout: 900000, waitUntil: 'commit' }); await p.waitForFunction('window.__ready && window.__frames > 3', null, { timeout: 900000 }); return p; };
+const open = async (tag, extra = '') => { const p = LIVE ? await (await b.newContext({ viewport: { width: 640, height: 360 } })).newPage() : await ctx.newPage(); if (LIVE) extra = ''; p.on('pageerror', (e) => console.log(`[${tag} pageerror]`, e.message));
+  await p.goto((LIVE || 'http://localhost:4174/') + '?autostart&fixeddt=0.1&q=low' + extra, { timeout: 900000, waitUntil: 'commit' }); await p.waitForFunction('window.__ready && window.__frames > 3', null, { timeout: 900000 }); return p; };
 const frames = async (p, n) => { const f0 = await p.evaluate('window.__frames'); await p.waitForFunction(`window.__frames > ${f0 + n}`, null, { timeout: 900000, polling: 200 }); };
 const A = await open('A'), B = await open('B'), C = await open('C', '&fakenopresence');
 const P = { A, B, C };
