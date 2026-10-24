@@ -31,7 +31,7 @@ export async function use(name) {
 
 async function initSupabase() {
   try {
-    sb = createClient(URL_, KEY, { auth: { persistSession: true, autoRefreshToken: true }, realtime: { params: { eventsPerSecond: 20 } } });
+    sb = createClient(URL_, KEY, { auth: { persistSession: true, autoRefreshToken: true }, realtime: { params: { eventsPerSecond: 20 }, worker: true, heartbeatIntervalMs: 15000 } });   // worker: heartbeats keep going in background tabs (timer throttling dropped players from the room)
     // identity: an anonymous Supabase account per browser (enable "Anonymous sign-ins" in Auth settings);
     // without it the game still joins the room with a local id, but cannot post scores
     let uid = null;
@@ -97,6 +97,10 @@ function makeRoom(userId) {
     lastMove = now; ch.send({ type: 'broadcast', event: 'mv', payload: { p: peer, m: pick(mine, MOVE_KEYS) } }).catch(() => {});
   };
   const pick = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => keys.has(k)));
+  // back in the foreground (or online again): announce ourselves and our spot straight away
+  const reannounce = () => { if (!online) return; trackedKey = ''; sendSlow(); sendMove(true); };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) reannounce(); });
+  addEventListener('online', reannounce);
   // keepalive: re-send where we are every 2 s, so anyone who missed a movement message (or just joined) catches up
   setInterval(() => { if (online && performance.now() - lastMove > 2000) sendMove(true); }, 1000);
   addEventListener('pagehide', () => { try { ch.untrack(); sb.removeChannel(ch); } catch (_) {} });
