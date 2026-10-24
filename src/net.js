@@ -16,6 +16,7 @@ const MOVE_KEYS = new Set(['x', 'y', 'z', 'h', 'a', 'sp', 'r']);   // high-rate 
 const MOVE_HZ = 6;
 
 let sb = null, supa = null;
+if (typeof window !== 'undefined') queueMicrotask(() => console.info('BagVerse online backend:', backend()));   // which services this build uses
 export function backend() { return typeof window !== 'undefined' && window.claude?.use ? 'claude' : URL_ && KEY ? 'supabase' : 'none'; }
 
 /** claude.ai capability or its Supabase equivalent; null when there is no online service */
