@@ -850,7 +850,9 @@ function adapt(fps) {
     surfaceUniforms.uSurfAmt.value = 0;
   } else {
     look.shedBloom();
-    renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;   // freeze shadows: still drawn, no longer re-rendered
+    // cheaper shadows, still live (a frozen shadow map left a stale "ghost" of every moving character behind)
+    look.shrinkShadows(1024);
+    for (const n of crowd.list) n.c.root.traverse((o) => { if (o.isMesh) o.castShadow = false; });
   }
   const lower = QUALITIES[Math.max(0, QUALITIES.indexOf(quality) - shed)];
   store.set('bagverse.q', lower);

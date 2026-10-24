@@ -331,6 +331,17 @@ export class Look {
     g.uSat.value = p.sat; g.uContrast.value = p.contrast; g.uVignette.value = p.vignette; g.uWarm.value = p.warm;
   }
 
+  /** lower shadow-map resolution at runtime (slow-device fallback); maps are re-created at the new size on the next frame */
+  shrinkShadows(size = 1024) {
+    const lights = this.csm ? this.csm.lights : this.sun ? [this.sun] : [];
+    for (const l of lights) {
+      if (!l.shadow || l.shadow.mapSize.x <= size) continue;
+      l.shadow.mapSize.set(size, size);
+      if (l.shadow.map) { l.shadow.map.dispose(); l.shadow.map = null; }
+    }
+    this.renderer.shadowMap.autoUpdate = true; this.renderer.shadowMap.needsUpdate = true;
+  }
+
   /** patch materials so they receive cascaded shadows (call for anything added after load) */
   setupShadows(root) {
     if (!this.csm) return;
