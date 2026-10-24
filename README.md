@@ -635,3 +635,12 @@ Two more user models swap out generated structures through the same code as the 
 - **GM Arch** (`public/assets/gm_arch.glb`, `.m.glb` for LOW) replaces the "WELCOME TO BAGVERSE / GM" arch over the south avenue (z = 92). 24 m wide, 14.4 m tall, the GM! bubble faces the plaza; the road under it stays open and the Pepe / Doge plinths are solid.
 - **Doge statue** (`public/assets/doge_statue.glb`, `.m.glb`) replaces the blue pillar and orb on the Doge & Bonk Park fountain at (-125, -125). 12 m tall on the old 1 m basin, facing the city.
 - Source FBX in `blender/props/{gm_arch,doge_statue}/`, exported with `export_prop.py` at 2048 px (LOW copies at 1024). Check: `node tools/landmark_shot.mjs` (screenshots plus walk-through / collision checks). `tools/modelview.html` + `tools/modelshot.mjs` render a single GLB.
+
+## Tile Drop (Oct 24)
+The second mini-game (`src/minigames/tiledrop.js`), from the **TILE DROP** portal in the plaza (E). The Doge Park kiosk shows your Tile Drop best and wins.
+- **Arena:** three floors of 127 hex tiles (lime, cyan, magenta) 215 / 204 / 193 m above the plaza (the tallest tower is ~168 m). A tile flashes red when stepped on and falls 0.5 s later. Fall through a floor and you land on the next; below the last floor you're out. Last one standing wins; 150 s cap.
+- **Physics:** while playing, the player's physics is swapped for the arena's own (`TilePhysics`: gravity and landing on tiles that still hold), so normal movement, jumping and animations work unchanged; the world physics comes back at the end.
+- **Solo:** you vs 5 bots (random skins and names). Bots pick nearby solid tiles with solid neighbours, avoid the edge, jump over holes, and get sloppier as the game goes on.
+- **Match:** "Host a match" opens a 15 s invite (same banner as Bag Run races, Y / tap to join). Same seed and start for everyone, no bots. Each player's fallen tiles go out in their presence (`run.tl`, base-36 ids), so every screen drops the same tiles; `run.s` (survival x10), `run.d` (out) and `run.w` (won) drive the live standings. A match win with at least one rival counts on the leaderboard's wins tab.
+- **Score / XP:** survival seconds x10, +300 for a win. XP 15 + up to 35 for time + 15 for a win, full value for the first 10 games a day. Personal best and wins in `progress.s.mg.tiledrop`.
+- Tests: `tools/tiledrop_test.mjs` (solo), `tools/tiledrop_mp_test.mjs` (match on the fake Supabase build, port 4174).

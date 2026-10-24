@@ -54,8 +54,8 @@ export class Multiplayer {
       x: r2(s.pos.x), y: r2(s.pos.y), z: r2(s.pos.z), h: r2(s.yaw), a: s.anim, sp: r2(s.speed),
       r: s.ride ? { x: r2(s.ride.x), y: r2(s.ride.y), z: r2(s.ride.z), h: r2(s.ride.h), p: r2(s.ride.p), o: r2(s.ride.o), sp: r2(s.ride.sp) } : null,
       say: this.lastSay || null,
-      race: this.myRace || null,   // { id, plan, seed, at, host } while hosting / joined to a race
-      run: this.myRun || null,     // { id, s: score, b: bags, d: done } during and after a race
+      race: this.myRace || null,   // { id, game, plan, seed, at, host } while hosting / joined to a race or Tile Drop match
+      run: this.myRun || null,     // { id, s: score, b: bags, d: done } during and after a race; Tile Drop adds g: 'td', tl: my fallen tiles
       mob: this.myMob || null,     // { e: emote, t0: epoch ms of clip time 0, of: leader peer or null }
     };
     const key = JSON.stringify(p);
@@ -72,7 +72,7 @@ export class Multiplayer {
     for (const r of this.remotes.values()) {
       const x = r.p.race; if (!x || !x.host || typeof x.id !== 'string' || typeof x.at !== 'number') continue;
       if (x.at < now + 1500 || x.at > now + 600000) continue;   // open, and not absurdly far ahead
-      out.push({ race: { id: str(x.id, 16), plan: str(x.plan, 16), seed: num(x.seed, 0, 4294967295) >>> 0, at: x.at, host: false }, by: this.displayName(r) });
+      out.push({ race: { id: str(x.id, 16), game: x.game === 'tiledrop' ? 'tiledrop' : 'bagrun', plan: str(x.plan, 16), seed: num(x.seed, 0, 4294967295) >>> 0, at: x.at, host: false }, by: this.displayName(r) });
     }
     return out;
   }
@@ -125,7 +125,7 @@ export class Multiplayer {
     if (!r) { r = { peer: peer.peer, by: peer.by, guest: peer.guest, isMe: peer.isMe, p: {}, pos: new THREE.Vector3(), yaw: 0, holder: {}, born: performance.now(), sayI: pr.say?.i ?? null }; this.remotes.set(peer.peer, r);   // sayI: never replay a line said before we arrived
       if (!peer.isMe) this.announce(str(pr.n, 16) || 'A player', true); }
     const prev = r.p; r.p = pr; r.by = peer.by;
-    r.target = new THREE.Vector3(num(pr.x, -400, 400), num(pr.y, -20, 200), num(pr.z, -400, 400));
+    r.target = new THREE.Vector3(num(pr.x, -400, 400), num(pr.y, -20, 300), num(pr.z, -400, 400));
     r.tyaw = num(pr.h, -50, 50);
     const skin = this.validSkin(pr.skin) ? pr.skin : 'goldenking';
     if (skin !== r.skin) this.setSkin(r, skin);

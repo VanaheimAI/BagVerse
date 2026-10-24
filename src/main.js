@@ -31,6 +31,7 @@ import { Collectibles, TIER_LEVEL, setBagModels } from './collectibles.js';
 import { MissionsUI } from './missions_ui.js';
 import { Audio } from './audio.js';
 import { BagRun, RunUI } from './minigames/bagrun.js';
+import { TileDrop } from './minigames/tiledrop.js';
 import { Multiplayer } from './multiplayer.js';
 import { Leaderboard } from './leaderboard.js';
 import { Wallet, short as shortAddr, MOBILE as WALLET_MOBILE } from './wallet.js';
@@ -290,11 +291,13 @@ missionsUI = new MissionsUI({ progress, quests, collect, touch: input.touch });
 missionsUI.onToast = (m) => { hud.toast(m); sfx.play('gift'); };
 { const o = missionsUI.open.bind(missionsUI); missionsUI.open = (t) => { if (!missionsUI.isOpen) sfx.play('open'); o(t); }; }
 // ---- mini-games: BAG RUN (portal in the plaza)
-const runUI = new RunUI(() => bagRun.finish(true));
+const runUI = new RunUI(() => (tileDrop.active ? tileDrop.finish(true) : bagRun.finish(true)));
 const bagRun = new BagRun({ scene, world, player, progress, quests, sfx, hud, collect, ui: runUI });
 bagRun.onTrip = () => { player.body.vel.x *= 0.15; player.body.vel.z *= 0.15; if (veh) veh.v *= 0.2; };
+const inGame = () => bagRun.active || tileDrop.active;
 function startBagRun(race = null) {
-  if (bagRun.active) return;
+  if (inGame()) return;
+  runUI.labels(null);
   if (veh) dismount();
   if (crowd.flashmob) crowd.endFlashmob();
   hud.closeModal(); missionsUI.close();
@@ -304,7 +307,7 @@ function startBagRun(race = null) {
 }
 // portal: with teammates online you can host a race (same route + start for everyone who joins in 15 s)
 function bagRunMenu() {
-  if ((!mp.room && !lb.db) || bagRun.active) return startBagRun();
+  if ((!mp.room && !lb.db) || inGame()) return startBagRun();
   const top = lb.top('week', 3);
   hud.modal('BAG RUN', `
     <p>60-second dash for Bags. Solo, or open a <b>race</b>: teammates get a join invite and you all start together on the same route.</p>
@@ -314,7 +317,7 @@ function bagRunMenu() {
   $('br-lb').onclick = () => lb.open('week');
   $('br-solo').onclick = () => startBagRun();
   if ($('br-race')) $('br-race').onclick = () => {
-    const race = { id: Math.random().toString(36).slice(2, 10), plan: bagRun.pickPlan(), seed: (Math.random() * 4294967295) >>> 0, at: Date.now() + 15000, host: true };
+    const race = { id: Math.random().toString(36).slice(2, 10), game: 'bagrun', plan: bagRun.pickPlan(), seed: (Math.random() * 4294967295) >>> 0, at: Date.now() + 15000, host: true };
     startBagRun(race);
     hud.chat('SYSTEM', 'BagVerse', `You opened a Bag Run race. Teammates have 15 s to join.`, '#3dfff0');
   };
@@ -325,17 +328,17 @@ const declined = new Set(); let inviteRace = null;
 function joinRace(race) {
   if (!race || race.at < Date.now() + 1200) { hud.toast('THAT RACE ALREADY STARTED'); return; }
   invite.hidden = true; inviteRace = null;
-  startBagRun({ ...race, host: false });
+  if (race.game === 'tiledrop') startTileDrop({ ...race, host: false }); else startBagRun({ ...race, host: false });
 }
 invite.onclick = (e) => { if (e.target.dataset.x) { declined.add(inviteRace?.id); invite.hidden = true; return; } joinRace(inviteRace); };
 function raceFrame() {
-  const open = !bagRun.active && !skins.isOpen ? mp.openRaces().filter((x) => !declined.has(x.race.id)) : [];
+  const open = !inGame() && !skins.isOpen ? mp.openRaces().filter((x) => !declined.has(x.race.id)) : [];
   if (!open.length) { invite.hidden = true; inviteRace = null; }
   else {
     const x = open[0]; inviteRace = x.race;
     const secs = Math.ceil((x.race.at - Date.now()) / 1000);
     invite.innerHTML = '';
-    const t = document.createElement('span'); t.textContent = `🏁 ${x.by.toUpperCase()}'S BAG RUN RACE · STARTS IN ${secs}s`;
+    const t = document.createElement('span'); t.textContent = x.race.game === 'tiledrop' ? `🟩 ${x.by.toUpperCase()}'S TILE DROP MATCH · STARTS IN ${secs}s` : `🏁 ${x.by.toUpperCase()}'S BAG RUN RACE · STARTS IN ${secs}s`;
     const k = document.createElement('b'); k.textContent = input.touch ? 'TAP TO JOIN' : 'Y · JOIN';
     const c = document.createElement('i'); c.textContent = '✕'; c.dataset.x = '1';
     invite.append(t, k, c);
@@ -348,6 +351,78 @@ function raceFrame() {
     if ((raceFrame.t = (raceFrame.t || 0) + 1) % 15 === 0) bagRun.ui.board(mp.raceBoard(bagRun.race.id, { name: progress.s.name.slice(0, 14), score: bagRun.score }));
     if (bagRun.race.host && bagRun.state === 'run') mp.setRace(null);   // started: stop inviting
   }
+  // during a Tile Drop match: my tiles + survival out, everyone else's in
+  if (tileDrop.active && tileDrop.race) {
+    const id = tileDrop.race.id, T = tileDrop.state === 'run' ? tileDrop.clock - tileDrop.startClock : 0;
+    mp.setRun({ id, g: 'td', s: Math.floor((tileDrop.me.out || T) * 10), d: tileDrop.me.out ? 1 : 0, tl: tileDrop.mine.map((v) => v.toString(36)).join(',') });
+    const rivals = [];
+    for (const r of mp.remotes.values()) {
+      const x = r.p.run; if (!x || x.id !== id || r.isMe) continue;
+      if (typeof x.tl === 'string' && x.tl) tileDrop.remoteTiles(x.tl.split(',').slice(0, 600).map((v) => parseInt(v, 36)).filter((v) => v >= 0 && v < 3000));
+      rivals.push({ name: mp.displayName(r).slice(0, 14), out: !!x.d, t: Math.min(150, Math.max(0, +x.s || 0) / 10) });
+    }
+    tileDrop.rivalList = rivals;
+    if (tileDrop.race.host && tileDrop.state === 'run') mp.setRace(null);
+  }
+}
+// ---- mini-game 2: TILE DROP (portal in the plaza; the Doge Park kiosk event)
+const tileDrop = new TileDrop({ scene, player, progress, quests, sfx, hud, ui: runUI, getChars: () => Object.values(CHARS) });
+function startTileDrop(race = null) {
+  if (inGame()) return;
+  if (veh) dismount();
+  if (crowd.flashmob) crowd.endFlashmob();
+  hud.closeModal(); missionsUI.close();
+  quests.emit('portal', 1);
+  tileDrop.begin(showTileResults, race);
+  if (tileDrop.active && race) { mp.setRace(race); mp.setRun({ id: race.id, g: 'td', s: 0, d: 0, tl: '' }); }
+}
+function tileDropMenu() {
+  if (inGame()) return;
+  const S = tileDrop.S;
+  hud.modal('TILE DROP', `
+    <p>Three floors of tiles over the plaza. Every tile you step on falls half a second later. Drop through a floor and you land on the next; fall through the last one and you're out. <b>Last one standing wins.</b></p>
+    <div class="row"><span>Your best</span><b>${S.best.toLocaleString()}</b></div>
+    <div class="row"><span>Wins</span><b>${S.wins}</b></div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button id="td-solo">PLAY VS BOTS</button>${mp.room ? '<button class="ghost" id="td-host">🟩 HOST A MATCH (STARTS IN 15 S)</button>' : ''}</div>
+    ${mp.room ? `<p style="opacity:.7">${mp.count ? `${mp.count} other player${mp.count > 1 ? 's' : ''} online: they get a join invite.` : 'Nobody else is online right now, but your match stays open for 15 s.'}</p>` : ''}
+    <p style="opacity:.7">Keep moving, jump over holes (Space), and stay near the middle.</p>`);
+  $('td-solo').onclick = () => startTileDrop();
+  if ($('td-host')) $('td-host').onclick = () => {
+    startTileDrop({ id: Math.random().toString(36).slice(2, 10), game: 'tiledrop', seed: (Math.random() * 4294967295) >>> 0, at: Date.now() + 15000, host: true });
+    hud.chat('SYSTEM', 'BagVerse', 'You opened a Tile Drop match. Teammates have 15 s to join.', '#3dfff0');
+  };
+}
+function showTileResults(r) {
+  if (r.race) { mp.setRace(null); mp.setRun({ id: r.race.id, g: 'td', s: Math.floor(r.time * 10), d: 1, w: r.win ? 1 : 0, tl: tileDrop.mine.map((v) => v.toString(36)).join(',') }); }
+  if (r.quit) { hud.toast('LEFT TILE DROP'); return; }
+  if (r.win) hud.chat('SYSTEM', 'Tile Drop', `${progress.s.name} won Tile Drop (${Math.floor(r.time)} s)!`, '#7cff3d');
+  hud.modal(r.win ? 'TILE DROP · YOU WIN! 🏆' : 'TILE DROP · RESULTS', `
+    <div class="rr-score"><small>${r.win ? 'LAST ONE STANDING' : `PLACED #${r.place} OF ${r.of}`}</small><b>${r.score.toLocaleString()}</b>${r.pb ? '<em>NEW PERSONAL BEST!</em>' : ''}</div>
+    <div class="row"><span>Survived</span><b>${Math.floor(r.time)} s</b></div>
+    <div class="row"><span>Personal best</span><b>${r.best.toLocaleString()}</b></div>
+    <div class="row"><span>Wins</span><b>${r.wins}</b></div>
+    <div class="row"><span>XP</span><b style="color:#7cff3d">+${r.xp}${r.runsToday > 10 ? ' <small style="opacity:.7">(reduced after 10 games today)</small>' : ''}</b></div>
+    <div id="td-stand"></div>
+    <div style="display:flex;gap:8px;margin-top:12px"><button id="td-again">PLAY AGAIN</button><button class="ghost" id="td-back">BACK TO THE SQUARE</button></div>`);
+  // standings: a match keeps updating while the others are still on the tiles
+  const draw = () => {
+    const el = $('td-stand'); if (!el) return;
+    let rows = r.standings.map((x) => ({ ...x }));
+    if (r.race) {
+      rows = [{ name: 'You', t: r.time, out: !r.win, w: r.win, me: true }];
+      for (const p of mp.remotes.values()) { const x = p.p.run; if (x && x.id === r.race.id && !p.isMe) rows.push({ name: mp.displayName(p).slice(0, 14), t: Math.max(0, +x.s || 0) / 10, out: !!x.d && !x.w, w: !!x.w }); }
+      rows.sort((a, b) => (b.w ? 1 : 0) - (a.w ? 1 : 0) || (a.out === b.out ? b.t - a.t : a.out ? 1 : -1));
+    }
+    el.replaceChildren(...rows.map((x, i) => { const d = document.createElement('div'); d.className = 'row' + (x.me ? ' me' : ''); const a = document.createElement('span'); a.textContent = `${i + 1}. ${x.name}${x.w ? ' · winner 🏆' : x.out ? '' : ' · still standing'}`; const b = document.createElement('b'); b.textContent = Math.floor(x.t) + ' s'; d.append(a, b); return d; }));
+  };
+  draw();
+  if (r.race) {
+    let n = 0; const iv = setInterval(() => { draw(); if (++n > 150) clearInterval(iv); }, 1000);
+    const humans = r.standings.length;
+    if (r.win && humans >= 2) { lb.submit({ score: null, win: true }); hud.toast('🏆 MATCH WON · +1 ON THE LEADERBOARD'); }
+  }
+  $('td-again').onclick = () => { hud.closeModal(); tileDropMenu(); };
+  $('td-back').onclick = () => hud.closeModal();
 }
 function showRunResults(r) {
   if (r.race) { mp.setRace(null); mp.setRun({ id: r.race.id, s: r.quit ? 0 : r.score, b: r.bags, d: 1 }); }
@@ -379,7 +454,7 @@ function showRunResults(r) {
   $('rr-again').onclick = () => { hud.closeModal(); bagRunMenu(); };
   $('rr-back').onclick = () => hud.closeModal();
 }
-addEventListener('keydown', (e) => { if (e.key === 'Escape' && bagRun.active) bagRun.finish(true); });
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && bagRun.active) bagRun.finish(true); if (e.key === 'Escape' && tileDrop.active) tileDrop.finish(true); });
 const LOCK = (gate, what) => { if (progress.has(gate)) return true; hud.toast(`${what} UNLOCKS AT LV ${progress.gateLevel(gate)}`); sfx.play('error'); return false; };
 player.allow = (name) => LOCK('emote:' + name, name.toUpperCase());
 progress.on((ev) => {
@@ -529,7 +604,7 @@ const lb = new Leaderboard({ hud, getLocal: () => ({ name: progress.s.name, skin
 lb.init();
 // a name saved online (same account on another device) fills in a browser that has none yet
 lb.onMine = (row) => { if (!progress.s.nameSet && row && typeof row.n === 'string' && row.n.length >= 2) { progress.s.name = row.n.replace(/[^\w.-]/g, '').slice(0, 16); progress.s.nameSet = true; progress.save(); player.refreshPlate(profile()); const f = document.getElementById('sk-pname'); if (f && !f.value) f.value = progress.s.name; } };
-addEventListener('keydown', (e) => { if (e.code === 'KeyL' && started && !hud.typing && !hud.modalOpen && !skins.isOpen && !bagRun.active) lb.open('week'); });
+addEventListener('keydown', (e) => { if (e.code === 'KeyL' && started && !hud.typing && !hud.modalOpen && !skins.isOpen && !inGame()) lb.open('week'); });
 mp.init().then((ok) => { if (ok) hud.chat('SYSTEM', 'BagVerse', 'Multiplayer on: everyone with this page open is here with you (👥 at the top right).', '#3dfff0'); });
 hud.onSend = (msg) => {
   hud.chat(profile().tag, progress.s.name, msg, '#7cff3d'); say(player.root, msg, player); player.bubbleT = 4.5;
@@ -656,7 +731,7 @@ function flashmob() {
     if (!n && mates) crowd.flashmob = { player, emote: player.emote, facing: player.facing, solo: true };
   }
   // someone else's flashmob nearby: offer to join (F)
-  const other = !mobJoin && !crowd.flashmob && !veh && !bagRun.active ? mp.nearbyMob(player.body.pos) : null;
+  const other = !mobJoin && !crowd.flashmob && !veh && !inGame() ? mp.nearbyMob(player.body.pos) : null;
   if (other && progress.has('emote:Dance') && (other.e !== 'Thriller' || progress.has('emote:Thriller'))) {
     flashmob.offer = other;
     if (input.hit('KeyF')) {
@@ -710,8 +785,8 @@ function progressFrame(dt, t) {
   sfx.loop('scooter', { vol: veh === scooter && veh ? 0.25 + Math.min(1, sv / 6) * 0.75 : 0, rate: 0.6 + Math.min(1, sv / 11) * 0.9 });
   if (veh === scooter && veh?.braking && !brakeWas && sv > 3) sfx.play('brake');
   brakeWas = !!(veh?.braking);
-  sfx.loop('city', { vol: bagRun.active ? 0.35 : 1, rate: 1 });
-  sfx.loop('crowd', { vol: bagRun.active ? 0 : THREE.MathUtils.clamp(1 - Math.hypot(P.x, P.z) / 45, 0, 1), rate: 1 });
+  sfx.loop('city', { vol: tileDrop.active ? 0 : bagRun.active ? 0.35 : 1, rate: 1 });
+  sfx.loop('crowd', { vol: inGame() ? 0 : THREE.MathUtils.clamp(1 - Math.hypot(P.x, P.z) / 45, 0, 1), rate: 1 });
   sfx.loop('pad', { vol: 0, rate: 1 });
   if (!lookSent) { lookAcc += Math.abs(input.look.dx) + Math.abs(input.look.dy); if (lookAcc > 500) { lookSent = true; quests.emit('look', 1); } }
   if (player.emote && player.emote !== lastEmote) quests.emit('emote', 1, { name: player.emote });
@@ -789,7 +864,7 @@ function openKiosk(k) {
     <div class="row"><span>Tournament</span><b>${k.event}</b></div>
     <div class="row"><span>Prize</span><b>${k.prize}</b></div>
     <div class="row"><span>Tier</span><b>TIER ${k.tier} · LV ${need}+</b></div>
-    <div class="row"><span>Game</span><b>${k.game === 'bagrun' ? `BAG RUN · your best this week: ${(progress.s.mg?.bagrun?.week === weekKey() ? progress.s.mg.bagrun.weekBest : 0).toLocaleString()}${lb.myRank('week') ? ` · #${lb.myRank('week')} on the board` : ''}` : `${k.gameName} (coming soon)`}</b></div>
+    <div class="row"><span>Game</span><b>${k.game === 'bagrun' ? `BAG RUN · your best this week: ${(progress.s.mg?.bagrun?.week === weekKey() ? progress.s.mg.bagrun.weekBest : 0).toLocaleString()}${lb.myRank('week') ? ` · #${lb.myRank('week')} on the board` : ''}` : k.game === 'tiledrop' ? `TILE DROP · your best: ${tileDrop.S.best.toLocaleString()} · wins: ${tileDrop.S.wins}` : `${k.gameName} (coming soon)`}</b></div>
     <div class="row"><span>Entry</span><b style="color:#7cff3d">FREE · skill-based · one per week</b></div>
     <div class="row"><span>Status</span><b style="color:${entered ? '#7cff3d' : ok ? '#ffc83d' : '#ff6b6b'}">${entered ? 'ENTERED THIS WEEK ✓' : ok ? 'OPEN' : `LOCKED · ${need - L} LEVEL${need - L === 1 ? '' : 'S'} TO GO`}</b></div>
     <p style="opacity:.75">Entries rank on this week's mini-game scores. Prize administration (KYC, eligibility, region rules) arrives with the blockchain phase; this preview records your entry locally.</p>
@@ -809,7 +884,7 @@ const watched = new Set();
 function interactions(dt) {
   const p = player.body.pos;
   let promptHtml = null, action = null;
-  if (veh || bagRun.active) { hud.prompt(null); return; }
+  if (veh || inGame()) { hud.prompt(null); return; }
   if (car && !car.cool && Math.hypot(p.x - car.pos.x, p.z - car.pos.z) < 3.8 && Math.abs(p.y - car.pos.y) < 1.5) {
     promptHtml = '<kbd>E</kbd> DRIVE · VISION 1789'; action = enterCar;
   }
@@ -822,6 +897,7 @@ function interactions(dt) {
     if (!promptHtml && Math.hypot(p.x - c.x, p.z - c.z) < 5.5) {
       promptHtml = progress.has('portals') ? `<kbd>E</kbd> ENTER ${portal.userData.label}` : `${portal.userData.label} · OPENS AT LV ${progress.gateLevel('portals')}`;
       if (progress.has('portals') && portal.userData.label === 'BAG RUN') { promptHtml = '<kbd>E</kbd> PLAY BAG RUN · 60 S DASH'; action = bagRunMenu; }
+      else if (progress.has('portals') && portal.userData.label === 'TILE DROP') { promptHtml = '<kbd>E</kbd> PLAY TILE DROP · LAST ONE STANDING'; action = tileDropMenu; }
       else if (progress.has('portals')) action = () => quests.emit('portal', 1) || hud.modal(portal.userData.label, `
         <p>Matchmaking into a 3–5 minute <b>${portal.userData.label}</b> instance.</p>
         <p style="opacity:.75">The mini-game is next on the roadmap (Phase 1: Bag Run). Wins and playtime will feed your skin's on-chain XP.</p>`);
@@ -917,7 +993,7 @@ const syncHolder = () => {
 wallet.onChange(syncHolder); syncHolder();
 const openSkins = () => { sfx.play('whoosh'); $('loader').hidden = true; $('hud').hidden = true; $('emotewheel').hidden = true; hud.closeModal(); skins.open(); };
 if (params.has('autostart')) start(); else openSkins();
-window.__bagverse = { wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
+window.__bagverse = { tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
 
 // slow-frame guard: after a short warm-up, a few seconds under ~22 fps sheds the heaviest effects live
 // and remembers the lower tier for next time
@@ -949,7 +1025,7 @@ function frame() {
   const realDt = clock.getDelta();
   const dt = FIXED_DT || Math.min(realDt, 1 / 20);
   const t = clock.elapsedTime;
-  input.enabled = started && !hud.typing && !hud.modalOpen && !skins.isOpen && !(bagRun.active && bagRun.state === 'countdown');
+  input.enabled = started && !hud.typing && !hud.modalOpen && !skins.isOpen && !(bagRun.active && bagRun.state === 'countdown') && !(tileDrop.active && tileDrop.state === 'countdown');
   if (skins.isOpen) {   // the selection screen owns the canvas: no world update / render while it is up
     sfx.loop('pad', { vol: 1, rate: 1 }); sfx.loop('city', { vol: 0, rate: 1 }); sfx.loop('crowd', { vol: 0, rate: 1 }); sfx.loop('steps', { vol: 0 }); sfx.loop('scooter', { vol: 0 });
     input.endFrame();
@@ -981,9 +1057,10 @@ function frame() {
     for (const o of [car, scooter]) if (o && (o !== scooter || o.summoned)) { o.update(dt, input, { crowd }); o.pushOut(player.body); }
     player.root.position.copy(player.body.pos);
     if (started) flashmob();
-    if (started && input.hit('KeyR')) summonScooter();
+    if (started && input.hit('KeyR') && !inGame()) summonScooter();
   }
   if (started) { mp.tick(dt); mp.indicators(camera, player.root.position); raceFrame(); if ((frame.lbt = (frame.lbt || 0) + dt) > 30) { frame.lbt = 0; lb.tick(); } }
+  if (started && tileDrop.active) tileDrop.update(dt);
   if (started && bagRun.active) bagRun.update(dt, player.body.pos);
   else if (started && progress.has('portals')) bagRun.warm(2);
   cam.update(dt, input, veh ? veh.pos : player.root.position);

@@ -391,6 +391,14 @@ export class RunUI {
   }
   route(t) { const c = this.el.querySelector('#rh-route'); c.textContent = 'ROUTE · ' + t; c.classList.remove('go'); void c.offsetWidth; c.classList.add('go'); }
   pop(t) { const c = this.el.querySelector('#rh-pop'); c.textContent = t; c.classList.remove('go'); void c.offsetWidth; c.classList.add('go'); }
+  /** relabel the three small fields (Tile Drop uses ALIVE / FLOOR / SCORE); null restores Bag Run's */
+  labels(ls) { const L = ls || ['SCORE', 'COMBO', 'BAGS']; this.el.querySelectorAll('.rh-bar span small').forEach((e, i) => (e.textContent = L[i])); }
+  /** raw values: big number + the three fields */
+  set({ time, a, b, c }) {
+    const q = (id) => this.el.querySelector(id);
+    q('#rh-time').textContent = time; q('#rh-time').classList.remove('low');
+    q('#rh-score').textContent = a; q('#rh-combo').textContent = b; q('#rh-bags').textContent = c;
+  }
   hud({ left, score, combo, bags }) {
     const q = (id) => this.el.querySelector(id);
     q('#rh-time').textContent = Math.ceil(left); q('#rh-time').classList.toggle('low', left < 10);
