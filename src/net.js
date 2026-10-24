@@ -68,7 +68,10 @@ function makeRoom(userId) {
       // presence carries a position snapshot from when it was last tracked; once a peer's live movement is
       // flowing it is newer, so the snapshot must not drag them back (that left idle teammates "stuck" elsewhere)
       const tracked = m.s || {};
-      const slowOnly = known ? Object.fromEntries(Object.entries(tracked).filter(([k]) => !MOVE_KEYS.has(k))) : tracked;
+      // only a peer we already have a LIVE position for keeps it; anyone else (new, or whose first announcement was
+      // still empty) takes the tracked position, or they would count as online but never be drawn
+      const hasPos = known && typeof cur.presence.x === 'number';
+      const slowOnly = hasPos ? Object.fromEntries(Object.entries(tracked).filter(([k]) => !MOVE_KEYS.has(k))) : tracked;
       cur.presence = { ...cur.presence, ...slowOnly }; cur.updatedAt = Date.now();
       state.set(p, cur);
     }
@@ -87,7 +90,7 @@ function makeRoom(userId) {
     if (on) { trackedKey = ''; sendSlow(); sendMove(true); }
   });
   const sendSlow = () => {
-    const k = JSON.stringify(slow); if (k === trackedKey || !online) return;
+    const k = JSON.stringify(slow); if (k === trackedKey || !online || !Object.keys(slow).length) return;   // nothing to announce yet
     trackedKey = k; ch.track({ by: userId, s: { ...slow, ...pick(mine, MOVE_KEYS) } }).catch(() => {});
   };
   const sendMove = (force) => {

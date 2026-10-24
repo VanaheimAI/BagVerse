@@ -123,7 +123,7 @@ export class Multiplayer {
     const pr = peer.presence;
     let r = this.remotes.get(peer.peer);
     if (!r) { r = { peer: peer.peer, by: peer.by, guest: peer.guest, isMe: peer.isMe, p: {}, pos: new THREE.Vector3(), yaw: 0, holder: {}, born: performance.now(), sayI: pr.say?.i ?? null }; this.remotes.set(peer.peer, r);   // sayI: never replay a line said before we arrived
-      if (!peer.isMe) this.hud.toast?.(`${str(pr.n, 16) || 'A PLAYER'} JOINED · FOLLOW THEIR MARKER OR PRESS M`); }
+      if (!peer.isMe) this.announce(str(pr.n, 16) || 'A player', true); }
     const prev = r.p; r.p = pr; r.by = peer.by;
     r.target = new THREE.Vector3(num(pr.x, -400, 400), num(pr.y, -20, 200), num(pr.z, -400, 400));
     r.tyaw = num(pr.h, -50, 50);
@@ -156,11 +156,22 @@ export class Multiplayer {
     const r = this.remotes.get(id); if (!r) return;
     if (r.c) this.scene.remove(r.c.root); if (r.board) this.scene.remove(r.board); r.mark?.remove();
     this.remotes.delete(id);
-    if (left && !r.isMe) this.hud.toast?.(`${this.displayName(r).toUpperCase()} LEFT`);
+    if (left && !r.isMe) this.announce(this.displayName(r), false);
   }
 
+  /** joined / left: a toast and a chat line for everyone in the world (each page announces what its room shows) */
+  announce(name, joined) {
+    if (!this.started) { this.pending = [...(this.pending || []), [name, joined]]; return; }   // people already here when we arrive: one summary line instead
+    this.hud.toast?.(joined ? `👋 ${name.toUpperCase()} JOINED · FOLLOW THEIR MARKER OR PRESS M` : `${name.toUpperCase()} LEFT`);
+    this.hud.chat('SYSTEM', 'BagVerse', joined ? `${name} joined BagVerse 👋` : `${name} left BagVerse`, joined ? '#3dfff0' : '#9aa7b5');
+  }
   // ---------------------------------------------------------------- per frame
   tick(dt) {
+    if (!this.started) {   // first frame in the world: say who is already here
+      this.started = true;
+      const here = (this.pending || []).filter(([, j]) => j).map(([n]) => n); this.pending = null;
+      if (here.length) this.hud.chat('SYSTEM', 'BagVerse', `Already here: ${here.slice(0, 6).join(', ')}${here.length > 6 ? ` +${here.length - 6}` : ''} (markers on screen, names on the map)`, '#3dfff0');
+    }
     this.push();
     const k = 1 - Math.exp(-12 * dt);
     for (const r of this.remotes.values()) {
