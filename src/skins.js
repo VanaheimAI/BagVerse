@@ -366,7 +366,7 @@ export class SkinScreen {
         <div class="sk-rotate">${ROTATE}<span>DRAG TO ROTATE</span><small>SCROLL / PINCH TO ZOOM</small></div>
       </div>
       <aside class="sk-info">
-        <label class="sk-player"><span>PLAYER NAME</span><input id="sk-pname" maxlength="16" placeholder="Enter your name" autocomplete="nickname" spellcheck="false" enterkeyhint="go" /></label>
+        <div class="sk-player"><label for="sk-pname">PLAYER NAME</label><div class="sk-prow"><input id="sk-pname" maxlength="16" placeholder="Enter your name" autocomplete="nickname" spellcheck="false" enterkeyhint="done" /><button id="sk-psave" type="button" disabled>SAVE</button></div></div>
         <div class="sk-k">SKIN INFO</div>
         <div class="sk-name" id="sk-name"></div>
         <span class="sk-pill" id="sk-pill"></span>
@@ -398,6 +398,8 @@ export class SkinScreen {
     $('sk-back').onclick = () => this.close();
     $('sk-shop').onclick = () => this.toast('SKIN SHOP OPENS WITH THE BLOCKCHAIN PHASE');
     $('sk-equip').onclick = () => this.equip();
+    $('sk-psave').onclick = () => this.saveName();
+    $('sk-pname').addEventListener('input', () => { $('sk-pname').classList.remove('bad'); this.nameState(); });
     // drag to rotate; wheel / pinch / double-tap to zoom (mouse + touch)
     const stage = $('sk-stage'); let drag = null;
     const pts = new Map(); let pinch0 = 0, zoom0 = 1;
@@ -427,7 +429,7 @@ export class SkinScreen {
       const typing = e.target && e.target.id === 'sk-pname';
       if (typing && e.key !== 'Enter' && e.key !== 'Escape') return;   // letters and arrows belong to the name field
       if (e.key === 'Escape') { e.stopPropagation(); this.close(); }
-      if (e.key === 'Enter') { e.preventDefault(); this.equip(); }
+      if (e.key === 'Enter') { e.preventDefault(); if (typing) this.saveName(); else this.equip(); }
       if (/^Arrow(Left|Right|Up|Down)$/.test(e.key)) {
         const vis = this.visibleSkins(); const i = vis.findIndex((s) => s.id === this.sel);
         const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -3, ArrowDown: 3 }[e.key];
@@ -517,6 +519,23 @@ export class SkinScreen {
     return true;
   }
 
+  /** SAVE button: store the typed name now, without equipping or closing */
+  saveName() {
+    const n = this.typedName();
+    if (!n) { this.commitName() && this.toast('ENTER YOUR PLAYER NAME (2–16 LETTERS)'); return; }
+    const same = n === this.getName?.() && !this.needName?.();
+    if (!this.commitName()) return;
+    const f = this.$('sk-pname'); f.value = n; f.blur();
+    this.toast(same ? 'NAME ALREADY SAVED' : 'NAME SAVED: ' + n);
+    this.nameState();
+  }
+  /** button reads SAVE while the field differs from the stored name, SAVED ✓ once it matches */
+  nameState() {
+    const b = this.$('sk-psave'); if (!b) return;
+    const n = this.typedName(), saved = !!n && n === this.getName?.() && !this.needName?.();
+    b.disabled = !n || saved; b.textContent = saved ? 'SAVED ✓' : 'SAVE'; b.classList.toggle('ok', saved);
+  }
+
   equip() {
     if (!this.commitName()) return;
     const s = this.skin(this.sel);
@@ -539,6 +558,7 @@ export class SkinScreen {
     this.isOpen = true; this.el.hidden = false;
     const f = this.$('sk-pname'); f.classList.remove('bad');
     f.value = this.needName?.() ? '' : this.getName?.() || '';
+    this.nameState();
     if (this.needName?.()) setTimeout(() => { if (this.isOpen && !matchMedia('(pointer: coarse)').matches) f.focus(); }, 300);   // phones: no keyboard pop-up until they tap
     this.setFilter(this.filter);
     this.select(this.getEquipped());

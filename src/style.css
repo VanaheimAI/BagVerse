@@ -644,8 +644,12 @@ body.touch #rh-board { top: calc(var(--t) + var(--mm, 76px) + 64px); right: var(
 
 /* ===== player name on the skin screen (top of the Skin Info panel) ===== */
 #skins .sk-player { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid rgba(160,190,220,.15); }
-#skins .sk-player span { font-size: 11px; letter-spacing: 1.5px; color: #7cff3d; font-weight: 700; }
-#skins .sk-player input { height: 40px; width: 100%; box-sizing: border-box; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(124,255,61,.55); background: rgba(6,10,16,.85);
+#skins .sk-player > label { font-size: 11px; letter-spacing: 1.5px; color: #7cff3d; font-weight: 700; }
+#skins .sk-prow { display: flex; gap: 6px; }
+#skins .sk-prow button { flex: none; height: 40px; padding: 0 12px; border-radius: 8px; border: 0; background: #7cff3d; color: #061006; font: 800 14px "Rajdhani", sans-serif; letter-spacing: 1px; cursor: pointer; }
+#skins .sk-prow button:disabled { cursor: default; background: rgba(124,255,61,.18); color: #9fbf8f; }
+#skins .sk-prow button.ok { background: rgba(124,255,61,.14); color: #7cff3d; }
+#skins .sk-player input { height: 40px; flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(124,255,61,.55); background: rgba(6,10,16,.85);
   color: #fff; font: 700 17px "Rajdhani", sans-serif; letter-spacing: .5px; outline: none; }
 #skins .sk-player input:focus { border-color: #7cff3d; box-shadow: 0 0 0 2px rgba(124,255,61,.25); }
 #skins .sk-player input::placeholder { color: #6f7f92; font-weight: 600; }
@@ -655,8 +659,10 @@ body.touch #rh-board { top: calc(var(--t) + var(--mm, 76px) + 64px); right: var(
 body.touch #skins { --namerow: 46px; }
 body.touch #skins .sk-info { overflow: visible; }
 body.touch #skins .sk-player { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); margin: 0; padding: 0; border: 0; flex-direction: row; align-items: center; gap: 8px; }
-body.touch #skins .sk-player span { white-space: nowrap; text-shadow: 0 1px 4px #000; }
-body.touch #skins .sk-player input { flex: 1; width: auto; height: 38px; font-size: 16px; }   /* 16px: no iOS zoom on focus */
+body.touch #skins .sk-player > label { white-space: nowrap; text-shadow: 0 1px 4px #000; }
+body.touch #skins .sk-prow { flex: 1; min-width: 0; }
+body.touch #skins .sk-prow button { height: 38px; }
+body.touch #skins .sk-player input { flex: 1; min-width: 0; width: auto; height: 38px; font-size: 16px; }   /* 16px: no iOS zoom on focus */
 body.touch #skins .sk-stage { bottom: calc(var(--strip-b) + var(--strip) + var(--namerow) + 4px); }
 @media (orientation: landscape) and (max-height: 540px) {
   body.touch #skins { --namerow: 44px; }

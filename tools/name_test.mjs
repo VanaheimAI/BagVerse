@@ -12,7 +12,12 @@ for (const [tag, opts] of [['desk', { viewport: { width: 1200, height: 675 } }],
   if (tag !== 'desk') { await p.evaluate(() => document.querySelector('.sk-player')?.closest('#skins')); continue; }
   await p.click('#sk-equip'); await p.waitForTimeout(400);
   console.log('equip without name -> still open:', await p.evaluate(() => window.__bagverse.skins.isOpen), '| toast:', await p.evaluate(() => document.getElementById('sk-toast').textContent));
-  await p.fill('#sk-pname', 'Ada Lovelace!'); await p.keyboard.press('Enter'); await p.waitForTimeout(800);
+  await p.fill('#sk-pname', 'Ada Lovelace!');
+  console.log('save btn before:', await p.evaluate(() => [document.getElementById('sk-psave').textContent, document.getElementById('sk-psave').disabled]));
+  await p.click('#sk-psave'); await p.waitForTimeout(400);
+  console.log('after SAVE -> open:', await p.evaluate(() => window.__bagverse.skins.isOpen), '| name:', await p.evaluate(() => window.__bagverse.progress.s.name), '| btn:', await p.evaluate(() => document.getElementById('sk-psave').textContent), '| toast:', await p.evaluate(() => document.getElementById('sk-toast').textContent));
+  await p.screenshot({ path: `/tmp/claude-0/name_saved.png` });
+  await p.click('#sk-equip'); await p.waitForTimeout(800);
   console.log('after name -> open:', await p.evaluate(() => window.__bagverse.skins.isOpen), '| saved name:', await p.evaluate(() => window.__bagverse.progress.s.name), '| nameSet:', await p.evaluate(() => window.__bagverse.progress.s.nameSet));
   await p.evaluate(() => window.__bagverse.skins.open()); await p.waitForTimeout(400);
   console.log('reopen prefill:', await p.evaluate(() => document.getElementById('sk-pname').value));
