@@ -614,3 +614,11 @@ The same build runs inside claude.ai (the artifact) and as a normal website. `sr
 - Off claude.ai there are no account names, so players show by their in-game name.
 - The anon key is public by design. Row-level security is what protects the data.
 - **Test the Supabase path without a project:** `FAKE_SUPABASE=1 VITE_SUPABASE_URL=x VITE_SUPABASE_ANON_KEY=y npx vite build --outDir /tmp/dist-fake`, then `npx vite preview --outDir /tmp/dist-fake --port 4174` and `node tools/supa_test.mjs`. `tools/fake-supabase.js` stands in for the client: tabs are players, and the table keeps the same own-row rule.
+
+## Solana wallet connect (Oct 24)
+- **Button:** `◎ CONNECT WALLET` in the top-right column (desktop) or the ⚙ menu (touch). Once linked it shows the short address in Solana green; click it for address, copy, Solscan and DISCONNECT. The billboard rent card's CONNECT WALLET button opens the same modal.
+- **Wallets:** any Wallet Standard wallet in the browser (Phantom, Solflare, Backpack, Glow, ...) via `@wallet-standard/app`. On Android Chrome, Mobile Wallet Adapter (`@solana-mobile/wallet-standard-mobile`, loaded only on Android) adds a wallet that opens the installed wallet app. On iPhone / phones with no wallet the modal offers "Open in Phantom / Solflare / Backpack", which opens BagVerse in the wallet's in-app browser.
+- **Sign-in:** linking asks for a free signature, never a transaction. Wallets with `solana:signIn` get a Sign In With Solana request; others sign the same SIWS-format message with `solana:signMessage` (domain, address, statement naming the player, URI, nonce, issued-at).
+- **Where it's kept:** `localStorage.bv_wallet` (`{address, wallet, message, signature, at}`; a reload re-attaches silently), and on the player's own leaderboard row as `w` (address) and `wp: {m, s}` (message, base58 signature). Disconnecting clears both.
+- **Trust:** the browser's check is not proof for prizes. Before anything of value depends on the link, a server must verify `wp.s` over `wp.m` with the address's Ed25519 key and check the domain and nonce.
+- Code: `src/wallet.js` (`Wallet`: `list`, `connect`, `reconnect`, `disconnect`, `deepLinks`), UI in `main.js` (`openWallet`). Test: `tools/wallet_test.mjs` (fake Wallet Standard wallets with real Ed25519 keys; signatures are verified).

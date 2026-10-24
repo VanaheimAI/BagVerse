@@ -10,6 +10,8 @@ import { weekKey, dayKey } from './progression.js';
 import { use } from './net.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// linked Solana wallet: address + the signed sign-in message, so a server can verify ownership later (null = none)
+const walletFields = (L) => (L.wallet?.address ? { w: String(L.wallet.address).slice(0, 44), wp: { m: String(L.wallet.message).slice(0, 600), s: String(L.wallet.signature).slice(0, 100) } } : { w: null, wp: null });
 const num = (v) => (typeof v === 'number' && isFinite(v) ? Math.max(0, Math.min(1e7, v)) : 0);
 
 export class Leaderboard {
@@ -72,7 +74,7 @@ export class Leaderboard {
         week: wk, wBest: Math.max(sameWeek ? num(cur.wBest) : 0, s), wAt: sameWeek && num(cur.wBest) >= s ? num(cur.wAt) : now,
         day: dk, dBest: Math.max(sameDay ? num(cur.dBest) : 0, s),
         best: Math.max(num(cur.best), s), runs: num(cur.runs) + (score == null ? 0 : 1),   // score null: a race win only
-        wins: num(cur.wins) + (win ? 1 : 0), wWins: (sameWeek ? num(cur.wWins) : 0) + (win ? 1 : 0), at: now,
+        wins: num(cur.wins) + (win ? 1 : 0), wWins: (sameWeek ? num(cur.wWins) : 0) + (win ? 1 : 0), at: now, ...walletFields(L),
       };
       try { await ref.set(next); this.mine = next; return true; }
       catch (e) { if (e?.code === 'invalid_argument') this.canWrite = false; console.warn('leaderboard: write failed', e?.code); return false; }
@@ -86,7 +88,7 @@ export class Leaderboard {
       const ref = this.db.doc('lb/' + this.uid);
       const cur = this.mine || (await ref.get().catch(() => null))?.data?.() || {};
       const L = this.getLocal();
-      const next = { ...cur, n: String(L.name || 'Player').slice(0, 16), skin: String(L.skin || '').slice(0, 24), lv: L.level | 0, at: Date.now() };
+      const next = { ...cur, n: String(L.name || 'Player').slice(0, 16), skin: String(L.skin || '').slice(0, 24), lv: L.level | 0, at: Date.now(), ...walletFields(L) };
       try { await ref.set(next); this.mine = next; return true; } catch (e) { if (e?.code === 'invalid_argument') this.canWrite = false; return false; }
     });
     return this.queue;

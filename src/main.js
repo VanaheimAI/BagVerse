@@ -33,6 +33,7 @@ import { Audio } from './audio.js';
 import { BagRun, RunUI } from './minigames/bagrun.js';
 import { Multiplayer } from './multiplayer.js';
 import { Leaderboard } from './leaderboard.js';
+import { Wallet, short as shortAddr, MOBILE as WALLET_MOBILE } from './wallet.js';
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 const $ = (id) => document.getElementById(id);
@@ -436,6 +437,57 @@ gfxBtn?.addEventListener('click', () => {
   store.set('bagverse.q', next); store.set('bagverse.safe', null); clearBoot();
   const u = new URL(location.href); u.searchParams.delete('q'); u.searchParams.delete('low'); location.replace(u.toString());
 });
+// ---- Solana wallet: HUD button + connect modal
+const wallet = new Wallet();
+const walletBtn = $('walletbtn');
+const escH = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const walletLabel = () => {
+  if (!walletBtn) return;
+  const a = wallet.address;
+  walletBtn.textContent = a ? '◎ ' + shortAddr(a) : '◎ CONNECT WALLET'; walletBtn.classList.toggle('on', !!a);
+  walletBtn.title = a ? 'Wallet linked: ' + a : 'Connect your Solana wallet';
+};
+wallet.toast = (m) => hud.toast(m);
+wallet.onChange(() => { walletLabel(); if (hud.modalOpen && document.querySelector('.wl')) openWallet(); });
+walletLabel();
+function openWallet() {
+  const a = wallet.address;
+  if (a) {
+    hud.modal('◎ SOLANA WALLET', `<div class="wl">
+      <div class="row"><span>Wallet</span><b>${escH(wallet.linked.wallet)}</b></div>
+      <div class="row"><span>Address</span><b class="wl-addr" title="${a}">${shortAddr(a)}</b></div>
+      <div class="row"><span>Status</span><b style="color:#7cff3d">LINKED · SIGNED ✓</b></div>
+      <p style="opacity:.75">This wallet is linked to <b>${escH(progress.s.name || 'you')}</b>. Raffle entries, billboard rentals and skin ownership will use it when the blockchain phase goes live.</p>
+      <div class="wl-acts"><button data-w="copy">COPY ADDRESS</button><a class="wl-btn" href="https://solscan.io/account/${a}" target="_blank" rel="noopener">VIEW ON SOLSCAN</a><button class="ghost" data-w="off">DISCONNECT</button></div></div>`);
+    document.querySelector('[data-w=copy]').onclick = () => navigator.clipboard?.writeText(a).then(() => hud.toast('ADDRESS COPIED'), () => {});
+    document.querySelector('[data-w=off]').onclick = async () => { await wallet.disconnect(); lb.saveProfile(); hud.toast('WALLET DISCONNECTED'); hud.closeModal(); };
+    return;
+  }
+  const ws = wallet.list();
+  const list = ws.length
+    ? `<div class="wl-list">${ws.map((w, i) => `<button class="wl-w" data-wi="${i}"><img src="${escH(w.icon)}" alt="" />${escH(w.name)}</button>`).join('')}</div>`
+    : WALLET_MOBILE
+      ? `<p>No wallet in this browser. Open BagVerse inside your wallet app:</p><div class="wl-list">${Wallet.deepLinks().map((l) => `<a class="wl-w" href="${l.href}">Open in ${l.name}</a>`).join('')}</div>`
+      : `<p>No Solana wallet found in this browser. Install one, then reload:</p><div class="wl-list">${Wallet.installLinks().map((l) => `<a class="wl-w" href="${l.href}" target="_blank" rel="noopener">Get ${l.name}</a>`).join('')}</div>`;
+  hud.modal('◎ CONNECT WALLET', `<div class="wl">${list}
+    <p class="wl-note">You'll sign a free message to prove the wallet is yours. It sends no transaction, costs no SOL and can't move funds.</p>
+    <p class="wl-err" hidden></p></div>`);
+  document.querySelectorAll('[data-wi]').forEach((b) => (b.onclick = async () => {
+    const err = document.querySelector('.wl-err');
+    document.querySelectorAll('[data-wi]').forEach((x) => (x.disabled = true)); b.classList.add('busy'); err.hidden = true;
+    try {
+      const L = await wallet.connect(ws[+b.dataset.wi], progress.s.name || 'Player');
+      lb.saveProfile(); hud.toast('WALLET LINKED · ' + shortAddr(L.address)); sfx.play('ping');
+      hud.chat('SYSTEM', 'BagVerse', `Wallet ${shortAddr(L.address)} linked to ${progress.s.name || 'you'}.`, '#7cff3d');
+    } catch (e) {
+      if (!document.querySelector('.wl-err')) return;
+      err.textContent = e.message; err.hidden = false;
+      document.querySelectorAll('[data-wi]').forEach((x) => (x.disabled = false)); b.classList.remove('busy');
+    }
+  }));
+}
+walletBtn?.addEventListener('click', () => { $('hud').classList.remove('menu-open'); openWallet(); });
+
 if (crashNote) hud.chat('SYSTEM', 'BagVerse', crashNote, '#ffc83d');
 hud.chat('SYSTEM', 'BagVerse', 'Welcome to The Bag Square. Visit the Wano Vault for graded One Piece card raffles; Kanto Vault (far south-east) holds the Pokémon ones.', '#7cff3d');
 if (car) hud.chat('SYSTEM', 'BagVerse', 'A Vision 1789 is parked on the road behind you (gold on the minimap). Walk up and press E to drive.', '#ffc83d');
@@ -457,7 +509,7 @@ mp.onGoTo = (p) => {
   player.teleport(p); hud.toast('TELEPORTED TO PLAYER');
 };
 // shared Bag Run leaderboard (claude.ai db: one row per player, everyone reads, each writes their own)
-const lb = new Leaderboard({ hud, getLocal: () => ({ name: progress.s.name, skin: charId, level: progress.s.level }) });
+const lb = new Leaderboard({ hud, getLocal: () => ({ name: progress.s.name, skin: charId, level: progress.s.level, wallet: wallet.linked }) });
 lb.init();
 // a name saved online (same account on another device) fills in a browser that has none yet
 lb.onMine = (row) => { if (!progress.s.nameSet && row && typeof row.n === 'string' && row.n.length >= 2) { progress.s.name = row.n.replace(/[^\w.-]/g, '').slice(0, 16); progress.s.nameSet = true; progress.save(); player.refreshPlate(profile()); const f = document.getElementById('sk-pname'); if (f && !f.value) f.value = progress.s.name; } };
@@ -791,7 +843,8 @@ function interactions(dt) {
         <div class="row"><span>Price</span><b>250 USDC · 7 days</b></div>
         <div class="row"><span>Status</span><b style="color:${u.open ? '#7cff3d' : '#ffc83d'}">${u.open ? 'AVAILABLE' : 'LEASED (DEMO)'}</b></div>
         <p style="opacity:.75">Self-serve rentals via Solana Pay + Billboard Lease NFT come with the blockchain phase.</p>
-        <button disabled style="opacity:.5">CONNECT WALLET (SOON)</button>`);
+        ${wallet.address ? `<p style="opacity:.75">Wallet ${shortAddr(wallet.address)} is linked and will pay for rentals when they open.</p>` : '<button data-w="link">CONNECT WALLET</button>'}`);
+      setTimeout(() => { const b = document.querySelector('[data-w=link]'); if (b) b.onclick = () => openWallet(); });
     }
   }
   // vaults: Wano (graded One Piece raffles) and Kanto (graded Pokemon raffles); prompt at each door
@@ -839,7 +892,7 @@ const skins = new SkinScreen({
 });
 const openSkins = () => { sfx.play('whoosh'); $('loader').hidden = true; $('hud').hidden = true; $('emotewheel').hidden = true; hud.closeModal(); skins.open(); };
 if (params.has('autostart')) start(); else openSkins();
-window.__bagverse = { paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
+window.__bagverse = { wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
 
 // slow-frame guard: after a short warm-up, a few seconds under ~22 fps sheds the heaviest effects live
 // and remembers the lower tier for next time

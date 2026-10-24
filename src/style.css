@@ -679,3 +679,26 @@ body.touch #skins .sk-stage { bottom: calc(var(--strip-b) + var(--strip) + var(-
 .mpmark small { font-size: 11px; color: #c9f; opacity: .85; color: #cfefff; }
 .mpmark:hover { background: rgba(61,255,240,.2); }
 body.in-run .mpmark { opacity: .6; }
+
+/* ===== Solana wallet ===== */
+#walletbtn { pointer-events: auto; background: var(--panel); border: 1px solid #9945ff; border-radius: 10px; padding: 6px 14px; color: #c9a6ff; font: 700 13px "Rajdhani", sans-serif; letter-spacing: 1px; cursor: pointer; }
+#walletbtn:hover, #walletbtn:focus-visible { background: rgba(153,69,255,.18); outline: none; }
+#walletbtn.on { border-color: #14f195; color: #14f195; }
+body.touch #walletbtn { display: none; position: absolute; z-index: 2; min-width: 128px; padding: 10px 14px; font-size: 14px; text-align: left;
+  right: calc(var(--r) + var(--btn) + var(--gap)); top: calc(var(--t) + var(--mm) + var(--gap) + 26px + 14px + 4 * (var(--btn) + var(--gap)) - 68px); }
+body.touch #hud.menu-open #walletbtn { display: block; }
+@media (orientation: landscape) and (max-height: 540px) { body.touch #walletbtn { right: calc(var(--r) + var(--mm) + 14px); top: calc(var(--t) + var(--btn) + var(--gap) + 172px); } }
+.wl-list { display: grid; gap: 8px; margin: 10px 0; }
+.wl-w { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(153,69,255,.5); background: rgba(153,69,255,.1);
+  color: #fff; font: 700 16px "Rajdhani", sans-serif; letter-spacing: .5px; text-decoration: none; cursor: pointer; text-align: left; box-sizing: border-box; }
+.wl-w:hover:not(:disabled) { border-color: #14f195; background: rgba(20,241,149,.1); }
+.wl-w:disabled { opacity: .5; cursor: default; }
+.wl-w.busy { opacity: 1; border-color: #14f195; }
+.wl-w.busy::after { content: 'CHECK YOUR WALLET…'; margin-left: auto; font-size: 12px; color: #14f195; letter-spacing: 1px; }
+.wl-w img { width: 28px; height: 28px; border-radius: 6px; }
+.wl-note { font-size: 13px; opacity: .7; }
+.wl-err { color: #ff6b8a; font-weight: 600; }
+.wl-err[hidden] { display: none; }
+.wl-addr { font-family: ui-monospace, monospace; }
+.wl-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.wl-btn { display: inline-flex; align-items: center; padding: 0 14px; border-radius: 8px; border: 1px solid var(--edge); color: #fff; text-decoration: none; font: 700 14px "Rajdhani", sans-serif; letter-spacing: 1px; }
