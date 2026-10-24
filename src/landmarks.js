@@ -44,6 +44,25 @@ export const VAULTS = {
   },
 };
 
+// Plain landmark swaps (no raffle, no holograms): the user's models replace generated structures the same way.
+//   GM ARCH      (public/assets/gm_arch.glb)     replaces the "WELCOME TO BAGVERSE / GM" arch over the south avenue;
+//                GM! sign faces the plaza, players walk through the opening (Pepe and Doge sit on the side plinths)
+//   DOGE STATUE  (public/assets/doge_statue.glb) replaces the blue pillar + orb on the Doge & Bonk Park fountain;
+//                stands on the old basin (top 1.0 m), facing the city
+export const PROPS = {
+  gm_arch: {
+    id: 'gm_arch', model: 'gm_arch', k: 24, door: 0, slab: 0.203,
+    centre: [0, 92], ground: 0, front: [0, -1],
+    cuts: [{ type: 'box', c: [0, 92], n: [0, 1], halfW: 12.6, halfD: 1.7, y1: 20, floorY: 0.3 }],
+  },
+  doge_statue: {
+    id: 'doge_statue', model: 'doge_statue', k: 12, door: 0, slab: 0.431,
+    centre: [-125, -125], ground: 1.0, front: [Math.SQRT1_2, Math.SQRT1_2],
+    cuts: [{ type: 'ring', c: [-125, -125], r0: 0, r1: 6.8, y1: 9, floorY: 0.85 }],   // pillar, orb, glow disc; the basin stays
+  },
+};
+const ALL = { ...VAULTS, ...PROPS };
+
 const UP = new THREE.Vector3(0, 1, 0);
 const v3 = (x, z, y = 0) => new THREE.Vector3(x, y, z);
 
@@ -91,20 +110,21 @@ function modelSource(gltf) {
   return src && { geo: toWorldFloat(src), mat: src.material };
 }
 function modelMatrix(V) {
-  const { n } = frame(V), sink = V.plate * V.k - 0.15;   // base slab top ends up 15 cm above the ground (climbable)
+  const { n } = frame(V), sink = V.plate != null ? V.plate * V.k - 0.15 : V.sink || 0;   // vaults: base slab top ends up 15 cm above the ground (climbable)
   return new THREE.Matrix4().compose(v3(V.centre[0], V.centre[1], V.ground - sink), new THREE.Quaternion().setFromAxisAngle(UP, Math.atan2(n.x, n.z)), new THREE.Vector3(V.k, V.k, V.k));
 }
 const PED = { r: 0.9, h: 1.1 };
 
 /** call before world.init: registers the collider edit, hologram specs and zone labels */
 export function prepareVaults(world, models) {
-  const active = Object.entries(VAULTS).filter(([, V]) => models[V.model]);
+  const active = Object.entries(ALL).filter(([, V]) => models[V.model]);
   if (!active.length) return;
-  world.zoneLabels = Object.fromEntries(active.map(([zid, V]) => [zid, V.label]));
+  world.zoneLabels = Object.fromEntries(active.filter(([, V]) => V.label).map(([zid, V]) => [zid, V.label]));
   world.zoneMoves = Object.fromEntries(active.filter(([, V]) => V.zone).map(([zid, V]) => [zid, V.zone]));
   // holograms: Wano = the real Luffy slab between two mystery One Piece slabs; Kanto = three mystery Pokemon slabs
   world.holoSpecs = [];
   for (const [zid, V] of active) {
+    if (!V.holos) continue;
     const spots = holoSpots(V), { n } = frame(V);
     spots.forEach((p, i) => {
       const featured = V.theme === 'onepiece' && i === 1;
@@ -127,6 +147,7 @@ export function prepareVaults(world, models) {
     };
     for (const [, V] of active) {
       const src = modelSource(models[V.model]); if (src) addGeo(src.geo, modelMatrix(V));
+      if (!V.holos) continue;
       const ped = new THREE.CylinderGeometry(PED.r, PED.r, PED.h, 12).translate(0, PED.h / 2, 0);
       for (const p of holoSpots(V)) addGeo(ped, new THREE.Matrix4().makeTranslation(p.x, V.ground, p.z));
     }
@@ -134,13 +155,13 @@ export function prepareVaults(world, models) {
     out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); out.setIndex(index);
     collider.geometry = out;
     collider.removeFromParent(); collider.position.set(0, 0, 0); collider.quaternion.identity(); collider.scale.set(1, 1, 1); collider.updateMatrix(); collider.updateMatrixWorld(true);   // matrixAutoUpdate is off for world meshes
-    console.log('vaults: collider', removed, 'old triangles cut');
+    console.log('landmarks: collider', removed, 'old triangles cut');
   };
 }
 
 /** call after world.init: cut the old visuals, add the vault meshes, pedestals and door lights */
 export function placeVaults(scene, world, models, { shadows = true } = {}) {
-  const active = Object.entries(VAULTS).filter(([, V]) => models[V.model]);
+  const active = Object.entries(ALL).filter(([, V]) => models[V.model]);
   if (!active.length) return 0;
   const cuts = active.flatMap(([, V]) => V.cuts);
   let removed = 0;
@@ -167,6 +188,7 @@ export function placeVaults(scene, world, models, { shadows = true } = {}) {
     const m = new THREE.Mesh(src.geo, src.mat); m.name = 'VAULT_' + V.id;
     modelMatrix(V).decompose(m.position, m.quaternion, m.scale);
     m.castShadow = shadows; m.receiveShadow = true; scene.add(m);
+    if (!V.holos) continue;
     const rim = new THREE.MeshStandardMaterial({ color: V.color, emissive: V.color, emissiveIntensity: 0.8, roughness: 0.3, metalness: 0.6 });
     for (const p of holoSpots(V)) {
       const ped = new THREE.Mesh(new THREE.CylinderGeometry(PED.r, PED.r * 1.15, PED.h, 24), pedMat); ped.position.set(p.x, V.ground + PED.h / 2, p.z);
@@ -176,6 +198,6 @@ export function placeVaults(scene, world, models, { shadows = true } = {}) {
     // warm light spilling from the door onto the forecourt
     const { n, door } = frame(V), L = new THREE.PointLight(V.color, 14, 16, 2); L.position.copy(door).addScaledVector(n, 2).setY(V.ground + 4); scene.add(L);
   }
-  console.log('vaults placed', active.map(([, V]) => V.id).join(', '), '·', removed, 'old triangles cut');
+  console.log('landmarks placed', active.map(([, V]) => V.id).join(', '), '·', removed, 'old triangles cut');
   return active.length;
 }

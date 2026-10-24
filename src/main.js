@@ -219,6 +219,7 @@ const standeeGltf = await loadModel('assets/standing_billboard.glb', 'standing_b
 const archGltf = await loadModel('assets/billboard_archway.glb', 'billboard_archway').catch((e) => { console.warn('archway billboard failed', e); return null; });
 const vaultGltfs = {};
 for (const n of ['wano_vault', 'kanto_vault']) vaultGltfs[n] = await loadModel(`assets/${n}.glb`, n).catch((e) => { console.warn('vault model failed', n, e); return null; });
+for (const n of ['gm_arch', 'doge_statue']) vaultGltfs[n] = await loadModel(A(n), n).catch((e) => { console.warn('landmark model failed', n, e); return null; });   // GM arch + Doge statue (src/landmarks.js PROPS)
 const bagGltfs = {};
 for (const c of ['green', 'gold', 'purple']) bagGltfs[c] = await loadModel(`assets/bag_${c}.glb`, 'bag_' + c).catch((e) => { console.warn('bag model failed', c, e); return null; });
 setBagModels(bagGltfs);

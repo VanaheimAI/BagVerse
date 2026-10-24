@@ -629,3 +629,9 @@ The same build runs inside claude.ai (the artifact) and as a normal website. `sr
 - **Status in the wallet window:** VERIFIED ✓ / VERIFYING… / NOT VERIFIED (with the reason and SIGN AGAIN) / SIGNED · NOT CHECKED HERE (claude.ai artifact or a host with no API).
 - **Setup (once):** run the `wallets` part of `supabase/schema.sql`; in Vercel add `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project Settings → API keys → service_role / secret; never a `VITE_` variable) and `SOLANA_RPC_URL` (a DAS-capable RPC URL with its key), then redeploy.
 - **Tests:** `node tools/api_wallet_test.mjs` (server rules: replay, other player, other site, wrong key, expiry, wallet moving, holdings refresh). `tools/wallet_test.mjs` + `tools/wallet_server.mjs` run the whole flow in a browser against the real handlers (commands at the top of the test).
+
+## GM Arch and Doge statue (Oct 24)
+Two more user models swap out generated structures through the same code as the vaults (`src/landmarks.js`, `PROPS`; cut old triangles from visuals and collider, add the model's own triangles):
+- **GM Arch** (`public/assets/gm_arch.glb`, `.m.glb` for LOW) replaces the "WELCOME TO BAGVERSE / GM" arch over the south avenue (z = 92). 24 m wide, 14.4 m tall, the GM! bubble faces the plaza; the road under it stays open and the Pepe / Doge plinths are solid.
+- **Doge statue** (`public/assets/doge_statue.glb`, `.m.glb`) replaces the blue pillar and orb on the Doge & Bonk Park fountain at (-125, -125). 12 m tall on the old 1 m basin, facing the city.
+- Source FBX in `blender/props/{gm_arch,doge_statue}/`, exported with `export_prop.py` at 2048 px (LOW copies at 1024). Check: `node tools/landmark_shot.mjs` (screenshots plus walk-through / collision checks). `tools/modelview.html` + `tools/modelshot.mjs` render a single GLB.
