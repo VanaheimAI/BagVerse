@@ -63,9 +63,13 @@ function makeRoom(userId) {
     const ps = ch.presenceState(), seen = new Set();
     for (const [p, metas] of Object.entries(ps)) {
       const m = metas[metas.length - 1] || {}; seen.add(p);
-      const cur = state.get(p) || { presence: {} };
+      const known = state.has(p), cur = state.get(p) || { presence: {} };
       cur.by = typeof m.by === 'string' ? m.by : null;
-      cur.presence = { ...cur.presence, ...(m.s || {}) }; cur.updatedAt = Date.now();
+      // presence carries a position snapshot from when it was last tracked; once a peer's live movement is
+      // flowing it is newer, so the snapshot must not drag them back (that left idle teammates "stuck" elsewhere)
+      const tracked = m.s || {};
+      const slowOnly = known ? Object.fromEntries(Object.entries(tracked).filter(([k]) => !MOVE_KEYS.has(k))) : tracked;
+      cur.presence = { ...cur.presence, ...slowOnly }; cur.updatedAt = Date.now();
       state.set(p, cur);
     }
     for (const p of [...state.keys()]) if (!seen.has(p)) state.delete(p);
@@ -93,6 +97,8 @@ function makeRoom(userId) {
     lastMove = now; ch.send({ type: 'broadcast', event: 'mv', payload: { p: peer, m: pick(mine, MOVE_KEYS) } }).catch(() => {});
   };
   const pick = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => keys.has(k)));
+  // keepalive: re-send where we are every 2 s, so anyone who missed a movement message (or just joined) catches up
+  setInterval(() => { if (online && performance.now() - lastMove > 2000) sendMove(true); }, 1000);
   addEventListener('pagehide', () => { try { ch.untrack(); sb.removeChannel(ch); } catch (_) {} });
   return Object.freeze({
     async presence(patch) {
@@ -154,7 +160,7 @@ function makeDb(uid) {
       async get() { const { data } = await sb.from('lb').select('id, doc').eq('id', id).maybeSingle(); return data ? rowToDoc(data) : { id, exists: false, data: () => undefined, metadata: {} }; },
       async set(body) {
         if (!uid || id !== uid) throw { code: 'invalid_argument', message: 'can only write your own row' };
-        const row = { id, doc: body, week: body.week ?? null, day: body.day ?? null, wbest: body.wBest | 0, dbest: body.dBest | 0, wins: body.wins | 0, updated_at: new Date().toISOString() };
+        const row = { id, doc: body, week: body.week ?? null, day: body.day ?? null, wbest: body.wBest | 0, dbest: body.dBest | 0, wins: body.wins | 0, updated_at: new Date().toISOString() };   // a name-only row has no week/day, so it never shows on a board
         const { error } = await sb.from('lb').upsert(row); if (error) throw { code: 'invalid_argument', message: error.message };
         refreshAll();
       },

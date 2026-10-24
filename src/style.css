@@ -656,3 +656,9 @@ body.touch #skins .sk-actions { flex-wrap: wrap; }
 body.touch #skins .sk-player { flex: 1 1 100%; margin: 0 0 2px; flex-direction: row; align-items: center; gap: 8px; }
 body.touch #skins .sk-player span { white-space: nowrap; }
 body.touch #skins .sk-player input { flex: 1; width: auto; height: 38px; font-size: 16px; }   /* 16px: no iOS zoom on focus */
+/* touch: room for the name row between the cards and the buttons */
+body.touch #skins { --namerow: 46px; --panel-b: calc(var(--b) + var(--act) + var(--namerow) + 10px); }
+@media (orientation: landscape) and (max-height: 540px) {
+  body.touch #skins { --namerow: 44px; }
+  body.touch #skins .sk-panel { bottom: calc(var(--b) + var(--act) + var(--namerow) + 8px); }
+}

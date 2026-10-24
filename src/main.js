@@ -458,6 +458,8 @@ mp.onGoTo = (p) => {
 // shared Bag Run leaderboard (claude.ai db: one row per player, everyone reads, each writes their own)
 const lb = new Leaderboard({ hud, getLocal: () => ({ name: progress.s.name, skin: charId, level: progress.s.level }) });
 lb.init();
+// a name saved online (same account on another device) fills in a browser that has none yet
+lb.onMine = (row) => { if (!progress.s.nameSet && row && typeof row.n === 'string' && row.n.length >= 2) { progress.s.name = row.n.replace(/[^\w.-]/g, '').slice(0, 16); progress.s.nameSet = true; progress.save(); player.refreshPlate(profile()); const f = document.getElementById('sk-pname'); if (f && !f.value) f.value = progress.s.name; } };
 addEventListener('keydown', (e) => { if (e.code === 'KeyL' && started && !hud.typing && !hud.modalOpen && !skins.isOpen && !bagRun.active) lb.open('week'); });
 mp.init().then((ok) => { if (ok) hud.chat('SYSTEM', 'BagVerse', 'Multiplayer on: everyone with this page open is here with you (👥 at the top right).', '#3dfff0'); });
 hud.onSend = (msg) => {
@@ -830,7 +832,7 @@ const skins = new SkinScreen({
   getLevel: () => progress.s.level,
   getName: () => progress.s.name,
   needName: () => !progress.s.nameSet,
-  setName: (n) => { progress.s.name = n; progress.s.nameSet = true; progress.save(); player.refreshPlate(profile()); },
+  setName: (n) => { progress.s.name = n; progress.s.nameSet = true; progress.save(); player.refreshPlate(profile()); lb.saveProfile(); },
   onEquip: (id) => { if (id !== charId) { pickChar(id); hud.toast?.(`SKIN EQUIPPED · ${id.toUpperCase()}`); sfx.play('whoosh'); quests.emit('skin', 1, { id }); } },
   onClose: () => { $('hud').hidden = false; start(); },
 });

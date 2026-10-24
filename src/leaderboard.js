@@ -26,7 +26,7 @@ export class Leaderboard {
     this.uid = user ? await user.id().catch(() => null) : null;
     try { this.canWrite = user?.can ? await user.can('data.write') : null; } catch (_) { this.canWrite = null; }
     this.subscribe();
-    if (this.uid) db.doc('lb/' + this.uid).onSnapshot((s) => { this.mine = s.exists ? s.data() : null; }, () => {});
+    if (this.uid) db.doc('lb/' + this.uid).onSnapshot((s) => { this.mine = s.exists ? s.data() : null; this.onMine?.(this.mine); }, () => {});
     console.log('leaderboard: db ready', this.canWrite === false ? '(read-only)' : '');
     return true;
   }
@@ -76,6 +76,18 @@ export class Leaderboard {
       };
       try { await ref.set(next); this.mine = next; return true; }
       catch (e) { if (e?.code === 'invalid_argument') this.canWrite = false; console.warn('leaderboard: write failed', e?.code); return false; }
+    });
+    return this.queue;
+  }
+  /** store the player's name (and skin / level) on their own row, keeping any scores already there */
+  saveProfile() {
+    if (!this.db || !this.uid || this.canWrite === false) return Promise.resolve(false);
+    this.queue = this.queue.then(async () => {
+      const ref = this.db.doc('lb/' + this.uid);
+      const cur = this.mine || (await ref.get().catch(() => null))?.data?.() || {};
+      const L = this.getLocal();
+      const next = { ...cur, n: String(L.name || 'Player').slice(0, 16), skin: String(L.skin || '').slice(0, 24), lv: L.level | 0, at: Date.now() };
+      try { await ref.set(next); this.mine = next; return true; } catch (e) { if (e?.code === 'invalid_argument') this.canWrite = false; return false; }
     });
     return this.queue;
   }
