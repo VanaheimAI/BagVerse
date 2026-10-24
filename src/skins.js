@@ -2,6 +2,7 @@
 // filters (All / Owned / Unlocked / Favorites) and Back / Shop / Equip. Shown after loading and in game (K).
 // The preview renders with the main renderer into the main canvas while the screen is open (no second GL context).
 import { gateFor } from './nft-gates.js';
+import { SKIN_GRADE, makeSlab, loadImage, labelCanvas } from './slab.js';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { makeCharacter } from './player.js';
@@ -104,8 +105,10 @@ export class SkinScreen {
    * getName(): current player name · needName(): true until the player has chosen one · setName(name)
    */
   /** chars: loaded gltfs by id (filled in as skins load) · loadChar(id): Promise<gltf> · allIds: every skin with a model */
-  constructor({ renderer, chars, loadChar, allIds, platform, getEquipped, onEquip, onClose, getLevel, getName, needName, setName }) {
-    Object.assign(this, { renderer, chars, loadChar, allIds, getEquipped, onEquip, onClose, getLevel, getName, needName, setName });
+  constructor({ renderer, chars, loadChar, allIds, platform, getEquipped, onEquip, onClose, getLevel, getName, needName, setName, getCards, getStats, transition, onMarket, onUse }) {
+    Object.assign(this, { renderer, chars, loadChar, allIds, getEquipped, onEquip, onClose, getLevel, getName, needName, setName, getCards, getStats, onMarket, onUse });
+    this.transition = transition || ((fn) => fn());
+    this.mode = 'skins'; this.items = [];
     this.platformGltf = platform;
     this.isOpen = false;
     this.favs = new Set(store.get('bagverse.favs', []));
@@ -357,7 +360,7 @@ export class SkinScreen {
     const el = this.el = document.createElement('div');
     el.id = 'skins'; el.hidden = true;
     el.innerHTML = `
-      <header class="sk-head"><div class="logo small" role="img" aria-label="BagVerse">BAGVERSE</div><span class="sk-div"></span><h1>SKIN SELECTION</h1></header>
+      <header class="sk-head"><div class="logo small" role="img" aria-label="BagVerse">BAGVERSE</div><span class="sk-div"></span><h1 id="sk-h1">SKIN SELECTION</h1></header>
       <div class="sk-stage" id="sk-stage">
         <svg class="sk-deco" viewBox="0 0 600 600" preserveAspectRatio="none" aria-hidden="true">
           <g class="ln"><path d="M40 70 h70 M40 70 v40 M60 150 h-20 v360 h18"/><path d="M80 210 h120 l30 30"/><circle cx="74" cy="210" r="7"/><circle cx="74" cy="210" r="2.5" class="f"/>
@@ -368,7 +371,7 @@ export class SkinScreen {
       </div>
       <aside class="sk-info">
         <div class="sk-player"><label for="sk-pname">PLAYER NAME</label><div class="sk-prow"><input id="sk-pname" maxlength="16" placeholder="Enter your name" autocomplete="nickname" spellcheck="false" enterkeyhint="done" /><button id="sk-psave" type="button" disabled>SAVE</button></div></div>
-        <div class="sk-k">SKIN INFO</div>
+        <div class="sk-k" id="sk-k1">SKIN INFO</div>
         <div class="sk-name" id="sk-name"></div>
         <span class="sk-pill" id="sk-pill"></span>
         <p class="sk-desc" id="sk-desc"></p>
@@ -377,9 +380,11 @@ export class SkinScreen {
           <div><div class="sk-k">BOOSTS</div><div class="sk-icons" id="sk-icons"></div></div>
           <button class="sk-fav" id="sk-fav" title="Add to favorites">${STAR}<span>FAVORITE</span></button>
         </div>
+        <button class="sk-use" id="sk-use" hidden></button>
+        <div class="sk-stats" id="sk-stats" hidden></div>
       </aside>
       <section class="sk-panel">
-        <div class="sk-ptitle">SELECT SKIN</div>
+        <div class="sk-ptitle" id="sk-ptitle">SELECT SKIN</div>
         <div class="sk-grid" id="sk-grid">${SKINS.map((s) => this.cardHtml(s)).join('')}</div>
         <div class="sk-filters" id="sk-filters">
           <button data-f="all" class="on">ALL</button><button data-f="owned">OWNED</button><button data-f="unlocked">UNLOCKED</button><button data-f="favorites">FAVORITES</button>
@@ -397,7 +402,8 @@ export class SkinScreen {
     $('sk-filters').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) this.setFilter(b.dataset.f); });
     $('sk-fav').onclick = () => this.toggleFav();
     $('sk-back').onclick = () => this.close();
-    $('sk-shop').onclick = () => this.toast('SKIN SHOP OPENS WITH THE BLOCKCHAIN PHASE');
+    $('sk-shop').onclick = () => this.toast(this.mode === 'collection' ? 'MARKET OPENS WITH THE BLOCKCHAIN PHASE' : 'SKIN SHOP OPENS WITH THE BLOCKCHAIN PHASE');
+    $('sk-use').onclick = () => { const it = this.item(this.sel); if (it) this.useItem(it); };
     $('sk-equip').onclick = () => this.equip();
     $('sk-psave').onclick = () => this.saveName();
     $('sk-pname').addEventListener('input', () => { $('sk-pname').classList.remove('bad'); this.nameState(); });
@@ -456,13 +462,14 @@ export class SkinScreen {
       s.gate = g; s.baseOwned ??= s.owned;
       s.owned = s.baseOwned && list.includes(s.id);
       s.lock = s.owned ? null : g.label || 'HOLDER SKIN';
-      const c = this.el?.querySelector(`[data-skin="${s.id}"]`);
+      const c = this.mode === 'skins' && this.el?.querySelector(`[data-skin="${s.id}"]`);
       if (c) { c.outerHTML = this.cardHtml(s); const img = this.el.querySelector(`[data-skin="${s.id}"] img`); if (img && this.thumbs[s.id]) img.src = this.thumbs[s.id]; }
     }
     if (this.isOpen) { this.setFilter(this.filter); this.select(this.sel); }
   }
   unlocked(s) { return s.owned || (s.level != null && this.getLevel() >= s.level); }
   visibleSkins() {
+    if (this.mode === 'collection') return this.items.filter((it) => this.filter === 'all' || (this.filter === 'owned' && it.owned) || (this.filter === 'cards' && it.kind === 'card') || (this.filter === 'favorites' && this.favs.has(it.id)));
     return SKINS.filter((s) => this.filter === 'all' || (this.filter === 'owned' && s.owned)
       || (this.filter === 'unlocked' && this.unlocked(s)) || (this.filter === 'favorites' && this.favs.has(s.id)));
   }
@@ -473,10 +480,11 @@ export class SkinScreen {
     const vis = new Set(this.visibleSkins().map((s) => s.id));
     this.el.querySelectorAll('.sk-card').forEach((c) => { c.hidden = !vis.has(c.dataset.skin); });
     this.$('sk-grid').classList.toggle('empty', vis.size === 0);
-    this.$('sk-grid').dataset.empty = f === 'favorites' ? 'Tap ★ FAVORITE on a skin to pin it here' : 'Nothing here yet';
+    this.$('sk-grid').dataset.empty = f === 'favorites' ? 'Tap ★ FAVORITE on an item to pin it here' : f === 'cards' ? 'No cards yet. Win one in the Wano or Kanto Vault raffles.' : 'Nothing here yet';
   }
 
   select(id) {
+    if (this.mode === 'collection') return this.selectItem(id);
     const s = this.skin(id); if (!s) return;
     this.sel = id;
     const R = RARITY[s.rarity];
@@ -553,6 +561,7 @@ export class SkinScreen {
   }
 
   equip() {
+    if (this.mode === 'collection') { this.setZoom(this.zoomT > 1.3 ? 1 : 2.1); this.$('sk-equip').textContent = this.zoomT > 1.3 ? 'BACK TO STAND' : 'VIEW SLAB'; return; }
     if (!this.commitName()) return;
     const s = this.skin(this.sel);
     if (s && !s.owned && s.gate) { this.toast(String(s.lock).toUpperCase()); this.onGate?.(s); return; }
@@ -562,13 +571,97 @@ export class SkinScreen {
     this.close();
   }
 
+  // ------------------------------------------------------------------ COLLECTION (inventory): every item as a graded slab
+  setMode(mode) {
+    const col = mode === 'collection';
+    this.mode = col ? 'collection' : 'skins';
+    this.el.classList.toggle('collection', col);
+    this.$('sk-h1').textContent = col ? 'COLLECTION' : 'SKIN SELECTION';
+    this.$('sk-k1').textContent = col ? 'ITEM INFO' : 'SKIN INFO';
+    this.$('sk-ptitle').textContent = col ? 'SELECT SLAB' : 'SELECT SKIN';
+    this.$('sk-shop').textContent = col ? 'MARKET' : 'SHOP';
+    this.$('sk-filters').innerHTML = col
+      ? '<button data-f="all">ALL</button><button data-f="owned">OWNED</button><button data-f="cards">CARDS</button><button data-f="favorites">FAVORITES</button>'
+      : '<button data-f="all">ALL</button><button data-f="owned">OWNED</button><button data-f="unlocked">UNLOCKED</button><button data-f="favorites">FAVORITES</button>';
+    if (col && this.filter === 'unlocked') this.filter = 'all';
+    if (!col && this.filter === 'cards') this.filter = 'all';
+    this.$('sk-use').hidden = !col; this.$('sk-stats').hidden = !col;
+    this.stand.clear(); this.shown = undefined; this.slab = null;
+    if (col) {
+      this.items = this.collectionItems();
+      this.$('sk-grid').innerHTML = this.items.map((it) => this.slabCardHtml(it)).join('');
+      this.renderStats();
+    } else {
+      this.$('sk-grid').innerHTML = SKINS.map((x) => this.cardHtml(x)).join('');
+      this.useThumbs(Object.keys(this.thumbs).length ? this.thumbs : { ...THUMBS, ...ART });
+    }
+  }
+  collectionItems() {
+    const skins = SKINS.filter((x) => x.owned || x.gate).map((x) => {
+      const R = RARITY[x.rarity], gr = SKIN_GRADE[x.rarity] || SKIN_GRADE.common;
+      return { id: 'skin:' + x.id, kind: 'skin', skin: x.id, name: x.name, sub: `BagVerse Skin · ${R.label}`, rarity: x.rarity, color: R.color,
+        cert: 'BV-' + [...x.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7).toString().slice(-8).padStart(8, '0'),
+        grade: { co: 'BVG', ...gr }, img: ART[x.id] || this.thumbs[x.id] || THUMBS[x.id], owned: !!x.owned, lock: x.owned ? null : x.lock, desc: x.desc, boosts: x.boosts };
+    });
+    const cards = (this.getCards?.() || []).map((c) => ({ kind: 'card', rarity: 'legendary', color: RARITY.legendary.color, ...c }));
+    return [...cards.filter((c) => c.owned), ...skins.filter((x) => x.owned), ...cards.filter((c) => !c.owned), ...skins.filter((x) => !x.owned)];
+  }
+  item(id) { return this.items.find((x) => x.id === id); }
+  slabCardHtml(it) {
+    const R = RARITY[it.rarity] || RARITY.common;
+    const lbl = `<span class="sl-lbl ${it.grade.co === 'BVG' ? 'bvg' : ''}"><i>${it.grade.co}</i><em>${it.name}</em><b>${it.grade.n}</b></span>`;
+    return `<button class="sk-card slab-card ${it.owned ? '' : 'locked'}" data-skin="${it.id}" style="--rc:${R.color};--rb0:${R.bg[0]};--rb1:${R.bg[1]}">
+      <span class="art slab">${it.slabPhoto ? '' : lbl}<img alt="" src="${it.thumb || it.img}" class="${it.slabPhoto ? 'photo' : ''}">${it.owned ? '' : `<i class="lk">${LOCK}</i>`}<em class="eq">EQUIPPED</em></span>
+      <b>${it.name}</b><small class="rar">${it.owned ? `${it.grade.co} ${it.grade.n}` : it.kind === 'card' ? 'RAFFLE PRIZE' : 'LOCKED'}</small><small class="selt">SELECTED</small></button>`;
+  }
+  renderStats() {
+    const st = this.getStats?.() || [];
+    const owned = this.items.filter((x) => x.owned).length;
+    this.$('sk-stats').innerHTML = [['SLABS', `${owned} / ${this.items.length}`], ...st].map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('');
+  }
+  selectItem(id) {
+    const it = this.item(id); if (!it) return;
+    this.sel = id;
+    const R = RARITY[it.rarity] || RARITY.common;
+    this.$('sk-name').textContent = it.name;
+    const pill = this.$('sk-pill'); pill.innerHTML = `${it.grade.co} ${it.grade.n}<span class="pl-r"> ${`${it.grade.word} / ${R.label}`.toUpperCase()}</span>`; pill.style.setProperty('--rc', R.color);
+    this.$('sk-desc').textContent = it.owned ? it.desc : `${it.lock ? it.lock + '. ' : ''}${it.desc || ''}`;
+    this.$('sk-icons').innerHTML = (it.boosts || []).map(([ic, label], i) => `<span class="${i === 0 ? 'on' : ''}" title="${label}">${ICONS[ic]}</span>`).join('');
+    this.$('sk-fav').classList.toggle('on', this.favs.has(id));
+    const eq = this.getEquipped();
+    this.el.querySelectorAll('.sk-card').forEach((c) => { c.classList.toggle('sel', c.dataset.skin === id); c.classList.toggle('equipped', c.dataset.skin === 'skin:' + eq); });
+    this.el.querySelector(`[data-skin="${id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    const btn = this.$('sk-equip'); btn.disabled = false; btn.textContent = this.zoomT > 1.3 ? 'BACK TO STAND' : 'VIEW SLAB';
+    const use = this.$('sk-use');
+    if (it.kind === 'skin' && it.owned) { use.hidden = false; use.disabled = it.skin === eq; use.textContent = it.skin === eq ? 'EQUIPPED ✓' : 'EQUIP THIS SKIN'; }
+    else if (it.url) { use.hidden = false; use.disabled = false; use.textContent = it.owned ? 'VIEW ON-CHAIN ↗' : 'SEE THE PRIZE ↗'; }
+    else if (!it.owned && it.kind === 'card') { use.hidden = false; use.disabled = false; use.textContent = 'HOW TO WIN IT'; }
+    else use.hidden = true;
+    const stage = this.$('sk-stage'); stage.classList.remove('nomodel'); stage.dataset.lock = '';
+    stage.classList.toggle('lockedslab', !it.owned);
+    loadImage(it.img).then((img) => {
+      if (this.sel !== id || this.mode !== 'collection') return;
+      if (this.slab) { this.stand.remove(this.slab); this.slab.userData.dispose?.(); }
+      this.slab = makeSlab(it, img); this.stand.add(this.slab); this.pop = 0;
+    }).catch(() => {});
+  }
+  useItem(it) {
+    if (it.kind === 'skin' && it.owned) { if (!this.chars[it.skin]) { this.loadChar(it.skin).then(() => this.useItem(it)); return; } this.onEquip(it.skin); this.toast('SKIN EQUIPPED · ' + it.name); this.selectItem(it.id); return; }
+    this.onUse?.(it);
+  }
+
   toast(msg) {
     const t = this.$('sk-toast'); t.textContent = msg; t.classList.add('show');
     clearTimeout(this._tt); this._tt = setTimeout(() => t.classList.remove('show'), 2200);
   }
 
-  open() {
+  open(mode = 'skins') {
     if (this.isOpen) return;
+    this.transition(() => this.openNow(mode));
+  }
+  openNow(mode) {
+    if (this.isOpen) return;
+    this.setMode(mode);
     // the world's per-preset character lighting is restored on close
     this._char = Object.fromEntries(Object.entries(charUniforms).map(([k, u]) => [k, u.value.clone ? u.value.clone() : u.value]));
     if (!Object.keys(this.thumbs).length) this.useThumbs({ ...THUMBS, ...ART });
@@ -578,7 +671,7 @@ export class SkinScreen {
     this.nameState();
     if (this.needName?.()) setTimeout(() => { if (this.isOpen && !matchMedia('(pointer: coarse)').matches) f.focus(); }, 300);   // phones: no keyboard pop-up until they tap
     this.setFilter(this.filter);
-    this.select(this.getEquipped());
+    this.select(this.mode === 'collection' ? (this.items.find((x) => x.skin === this.getEquipped()) || this.items[0])?.id : this.getEquipped());
     this.yaw = 0; this.yawV = 0; this.setZoom?.(1);
     if (document.pointerLockElement) document.exitPointerLock();
   }
@@ -586,6 +679,10 @@ export class SkinScreen {
   close() {
     if (!this.isOpen) return;
     if (!this.commitName()) return;   // first entry: a name is required before playing
+    this.transition(() => this.closeNow());
+  }
+  closeNow() {
+    if (!this.isOpen) return;
     this.isOpen = false; this.el.hidden = true;
     for (const [k, v] of Object.entries(this._char || {})) { const u = charUniforms[k]; if (u.value.copy) u.value.copy(v); else u.value = v; }
     this.onClose?.();
@@ -595,7 +692,14 @@ export class SkinScreen {
   frame(dt) {
     this.t += dt;
     if (!this.dragging()) { this.yaw += this.yawV * dt; this.yawV *= Math.exp(-4 * dt); }
-    const c = this.shown && this.instances[this.shown];
+    const c = this.mode === 'skins' && this.shown && this.instances[this.shown];
+    if (this.mode === 'collection' && this.slab) {
+      this.pop = Math.min(1, this.pop + dt * 3.5);
+      const k = 1 - Math.pow(1 - this.pop, 3);
+      this.slab.rotation.y = this.yaw + Math.sin(this.t * 0.7) * 0.18 * (this.dragging() ? 0 : 1);
+      this.slab.position.y = 1.2 + Math.sin(this.t * 1.3) * 0.035 + (1 - k) * 0.25;
+      this.slab.scale.setScalar(0.85 + 0.15 * k);
+    }
     if (c) {
       c.root.rotation.y = this.yaw;
       this.pop = Math.min(1, this.pop + dt * 4);
@@ -619,7 +723,8 @@ export class SkinScreen {
     // closer default framing (full body, pedestal top) easing toward a chest-up portrait as you zoom in
     this.zoom += (this.zoomT - this.zoom) * (1 - Math.exp(-10 * dt));
     const zt = (this.zoom - 1) / 1.6, ez = zt * zt * (3 - 2 * zt);
-    this.frameCamera(this.cam, size.x, size.y, rect, 0.86, 0.98 + 0.5 * ez, 2.05 - 1.15 * ez);
+    if (this.mode === 'collection') { const h0 = this.touch ??= matchMedia('(pointer: coarse)').matches; this.frameCamera(this.cam, size.x, size.y, rect, 0.86, 1.14 + 0.08 * ez, (h0 ? 1.75 : 2.05) - 0.7 * ez); }
+    else this.frameCamera(this.cam, size.x, size.y, rect, 0.86, 0.98 + 0.5 * ez, 2.05 - 1.15 * ez);
     // pin the painted pedestal deck (image px 1288,1095; ~830 px across) under the feet: px-per-metre at the deck
     this.cam.updateMatrixWorld();
     const pr = r.getPixelRatio();

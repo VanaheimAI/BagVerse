@@ -653,3 +653,13 @@ The Wano Vault (graded One Piece) and Kanto Vault (graded Pokémon) now run real
 - **Entering:** `POST /api/raffle/enter` (`api/raffle/enter.js`).
 - **Draw:** `/api/raffle/draw` (`api/raffle/draw.js`), run by the Vercel cron in `vercel.json` (Sundays 20:05 UTC) and also triggered by any game that sees a raffle past its draw time. Winner = entries sorted by (created_at, user_id), index `sha256(blockhash + ':' + raffle id) mod entries`, where blockhash is the first finalized Solana block at or after `draws_at` (found with `SOLANA_RPC_URL`). The result can't depend on who calls the draw or when, and anyone can recompute it from `proof`. Without an RPC URL the server falls back to a random seed and marks the proof `server-random`.
 - **Tests:** `node tools/api_raffle_test.mjs` (entry rules, block search on a fake chain, recomputing the winner), `tools/raffle_test.mjs` (browser flow on `tools/wallet_server.mjs`).
+
+## Collection screen and fades (Oct 24)
+- **Collection (I / the 🎒 button)** replaces the old inventory pop-up. It reuses the skin screen's vault room in a second mode (`SkinScreen.setMode('collection')`): header COLLECTION, ITEM INFO on the left, SELECT SLAB grid on the right, BACK / MARKET / VIEW SLAB below.
+- **Every item is a graded slab** (`src/slab.js`): a 3D acrylic case floating over the pedestal (drag to rotate, scroll / pinch or VIEW SLAB for a close-up) and a slab-shaped card in the grid.
+  - Skins are graded **BVG** (BagVerse Grading, our own in-game scale, black and gold label): Legendary 10 Gem Mint, Epic 10 Pristine, Holiday 9.5 Mint+, Rare 9 Mint, Common 8.5 NM-MT+. Skins aren't real graded cards, so they don't carry PSA / CGC labels.
+  - Real cards keep their real grader and use the photo of the actual slab: raffle prizes you won (owned), and this week's raffle prizes (locked, with "SEE THE PRIZE" / "HOW TO WIN IT").
+  - Owned skins can be equipped from the Collection (EQUIP THIS SKIN).
+  - Filters: ALL / OWNED / CARDS / FAVORITES. Stats under the info: slabs owned, level, playtime, raffle wins, Bag Run best, Tile Drop wins.
+- **Fades** (`src/fx.js`): a veil above everything. `fx.through(fn)` fades out, runs fn, fades in; used for opening and closing the skin screen and the Collection and for starting Bag Run / Tile Drop. `fx.cut()` fades in after any teleport longer than 25 m (fast travel, go-to-teammate, leaving a mini-game). Modals and the big map fade and rise in. Fades are off in tests (`fixeddt`) and with `?nofade`.
+- Test: `tools/collection_test.mjs`.

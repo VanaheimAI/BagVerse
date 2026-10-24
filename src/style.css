@@ -708,3 +708,41 @@ body.touch #hud.menu-open #walletbtn { display: block; }
 .rf-last { margin-top: 12px; padding: 8px 12px; border-radius: 10px; background: rgba(255,200,61,.07); border: 1px solid rgba(255,200,61,.35); }
 .rf-last small { display: block; font-size: 11px; letter-spacing: 1.5px; color: #ffc83d; margin-bottom: 4px; }
 .rf-last a { color: #3dfff0; }
+
+/* ===== collection (inventory): items as graded slabs ===== */
+#skins .slab-card .art.slab { aspect-ratio: 5 / 8; background: linear-gradient(160deg, #e9f1fa, #b9c6d6); padding: 5px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px;
+  border-radius: 6px 6px 0 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.7), inset 0 0 12px rgba(120,150,190,.35); }
+#skins .slab-card .art.slab::after { background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.35) 45%, transparent 55%); }
+#skins .slab-card .art.slab img { flex: 1; min-height: 0; border-radius: 3px; border: 2px solid var(--rc); box-sizing: border-box; }
+#skins .slab-card .art.slab img.photo { border: 0; object-fit: contain; background: #dfe7ef; }
+#skins .sl-lbl { flex: none; display: flex; align-items: center; gap: 4px; height: 19%; min-height: 22px; padding: 0 5px; border-radius: 2px; background: #fff; border: 2px solid #c62828; color: #16161c; box-sizing: border-box; overflow: hidden; }
+#skins .sl-lbl.bvg { background: #0d0f14; border-color: #d8b04a; color: #f3f5f8; }
+#skins .sl-lbl i { font-style: normal; font-weight: 800; font-size: 9px; color: #c62828; letter-spacing: .5px; }
+#skins .sl-lbl.bvg i { color: #d8b04a; }
+#skins .sl-lbl em { flex: 1; min-width: 0; font-style: normal; font-weight: 700; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+#skins .sl-lbl b { font-size: 16px; font-weight: 800; margin: 0; color: inherit; }
+#skins .sk-use { width: 100%; margin-top: 12px; height: 38px; border-radius: 8px; border: 1px solid #7cff3d; background: rgba(124,255,61,.12); color: #b6ff7a; font: 700 14px "Rajdhani", sans-serif; letter-spacing: 1px; cursor: pointer; }
+#skins .sk-use:hover:not(:disabled) { background: rgba(124,255,61,.25); }
+#skins .sk-use:disabled { opacity: .6; cursor: default; }
+#skins .sk-use[hidden], #skins .sk-stats[hidden] { display: none; }
+#skins .sk-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(160,190,220,.15); }
+#skins .sk-stats small { display: block; font-size: 9.5px; letter-spacing: .8px; white-space: nowrap; color: #8796a8; font-weight: 700; }
+#skins .sk-stats b { font-size: 15px; color: #fff; }
+#skins.collection .sk-rotate span::after { content: ""; }
+body.touch #skins .sk-use, body.touch #skins .sk-stats { display: none; }
+body.touch #skins.collection .slab-card { width: calc(var(--cw) * .85); }
+@supports (width: 1cqh) { body.touch #skins.collection .slab-card { width: calc((100cqh - 46px) * .62); } }
+
+/* ===== fades ===== */
+#fader { position: fixed; inset: 0; z-index: 500; background: #05030c; opacity: 0; pointer-events: none; }
+#modal:not([hidden]) { animation: mfade .22s ease-out; }
+#modal:not([hidden]) .card { animation: mrise .28s cubic-bezier(.2,.9,.3,1.2); }
+@keyframes mfade { from { opacity: 0; } }
+@keyframes mrise { from { opacity: 0; transform: translateY(14px) scale(.96); } }
+#bigmap:not([hidden]) { animation: mfade .25s ease-out; }
+#bigmap:not([hidden]) #bigmapcv { animation: mrise .3s ease-out; }
+#skins .sk-card { transition: transform .15s, border-color .15s, box-shadow .2s; }
+@media (prefers-reduced-motion: reduce) { #modal:not([hidden]), #modal:not([hidden]) .card, #bigmap:not([hidden]), #bigmap:not([hidden]) #bigmapcv { animation: none; } }
+body.touch #skins .sk-pill .pl-r { display: none; }
+body.touch #skins .sl-lbl em { display: none; }
+body.touch #skins .sl-lbl { justify-content: space-between; }

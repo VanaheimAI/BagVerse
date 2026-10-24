@@ -37,11 +37,13 @@ import { Leaderboard } from './leaderboard.js';
 import { Wallet, short as shortAddr, MOBILE as WALLET_MOBILE } from './wallet.js';
 import { NFT_GATES, gateFor } from './nft-gates.js';
 import { Raffles, countdown } from './raffles.js';
+import { fx } from './fx.js';
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const FIXED_DT = params.has('fixeddt') ? (parseFloat(params.get('fixeddt')) || 1 / 30) : 0;   // deterministic stepping for automated tests
+fx.enabled = !FIXED_DT && !params.has('nofade');   // screen fades (tests take screenshots straight away)
 
 // ---------------------------------------------------------------- graphics quality + crash safety
 // Three tiers. A session that dies (tab crash, GPU reset) leaves a "boot" flag behind, so the next load
@@ -276,6 +278,7 @@ Progress.unlockAll = params.has('unlockall');   // testing: every level gate ope
 const progress = new Progress();
 const profile = () => ({ tag: progress.tier[1], name: progress.s.name, level: progress.s.level });
 const player = new Player(CHARS[charId], world.physics, world.spawn, profile());
+{ const tp = player.teleport.bind(player); player.teleport = (p) => { if (started && player.body.pos.distanceTo(p) > 25) fx.cut(); tp(p); }; }   // long jumps (fast travel, go-to, game exits) fade in
 scene.add(player.root);
 const cam = new FollowCamera(camera, world.physics);
 cam.yaw = 0;
@@ -297,6 +300,10 @@ const bagRun = new BagRun({ scene, world, player, progress, quests, sfx, hud, co
 bagRun.onTrip = () => { player.body.vel.x *= 0.15; player.body.vel.z *= 0.15; if (veh) veh.v *= 0.2; };
 const inGame = () => bagRun.active || tileDrop.active;
 function startBagRun(race = null) {
+  if (inGame()) return;
+  fx.through(() => startBagRunNow(race));
+}
+function startBagRunNow(race) {
   if (inGame()) return;
   runUI.labels(null);
   if (veh) dismount();
@@ -369,6 +376,10 @@ function raceFrame() {
 // ---- mini-game 2: TILE DROP (portal in the plaza; the Doge Park kiosk event)
 const tileDrop = new TileDrop({ scene, player, progress, quests, sfx, hud, ui: runUI, getChars: () => Object.values(CHARS) });
 function startTileDrop(race = null) {
+  if (inGame()) return;
+  fx.through(() => startTileDropNow(race));
+}
+function startTileDropNow(race) {
   if (inGame()) return;
   if (veh) dismount();
   if (crowd.flashmob) crowd.endFlashmob();
@@ -624,7 +635,7 @@ hud.onAction = (a) => {
   if (a === 'ride') { summonScooter(); return; }
   if (a === 'map') hud.mapOpen ? hud.closeMap() : hud.openMap(player.body.pos, mp.mapMates());
   else if (a === 'emotes') $('emotewheel').hidden = !$('emotewheel').hidden;
-  else if (a === 'inventory') inventory();
+  else if (a === 'inventory') openCollection();
   else if (a === 'skins') openSkins();
   else if (a === 'chat') { $('hud').classList.add('chat-open'); $('chatin').focus(); }
   else if (a === 'menu') $('hud').classList.toggle('menu-open');
@@ -745,25 +756,6 @@ function flashmob() {
   } else flashmob.offer = null;
   $('hud').classList.toggle('can-mob', !!flashmob.offer || (emoting && !crowd.flashmob && !mobJoin && progress.has('emote:Thriller')));
   const mb = $('mobbtn'); if (mb) mb.textContent = flashmob.offer ? '🕺 JOIN FLASHMOB' : '🕺 FLASHMOB';
-}
-
-function inventory() {
-  const s = progress.s;
-  hud.modal('SKIN · DEFAULT (SOULBOUND)', `
-    <div class="row"><span>Level</span><b>${s.level}</b></div>
-    <div class="row"><span>Total_XP</span><b>${s.totalXp}</b></div>
-    <div class="row"><span>Playtime_Minutes</span><b>${s.playMin}</b></div>
-    <div class="row"><span>RWA_Wins</span><b>${s.rwaWins}</b></div>
-    <div class="row"><span>Visual_Tier</span><b>${progress.visualTier}</b></div>
-    <div class="row"><span>Garage</span><b>${s.vehicles.map((v) => (VEHICLES[v]?.name || v.toUpperCase()) + ' · OWNED').join(', ') || 'EMPTY'}</b></div>
-    ${scooter && s.vehicles.includes('punk') ? '<div style="margin:8px 0 4px"><button id="ridebtn">🛴 RIDE PUNK SCOOTER</button></div>' : ''}
-    <p style="opacity:.7">These stats are tracked locally for now. When the Metaplex Core contract ships they are written on-chain by the game server.</p>
-    <div style="display:flex;gap:8px;margin-top:8px"><input id="newname" maxlength="16" value="${s.name}" style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid #8b3dff;background:#0b0618;color:#fff;font:600 16px Rajdhani,sans-serif" /><button class="ghost" id="rename">RENAME</button></div>`);
-  if ($('ridebtn')) $('ridebtn').onclick = () => { hud.closeModal(); summonScooter('punk'); };
-  $('rename').onclick = () => {
-    const n = $('newname').value.trim();
-    if (n) { s.name = n.slice(0, 16).replace(/[^\w.-]/g, '_'); s.nameSet = true; progress.save(); player.refreshPlate(profile()); hud.closeModal(); }
-  };
 }
 
 // ---------------------------------------------------------------- progression events from play
@@ -1020,7 +1012,45 @@ const skins = new SkinScreen({
   setName: (n) => { progress.s.name = n; progress.s.nameSet = true; progress.save(); player.refreshPlate(profile()); lb.saveProfile(); },
   onEquip: (id) => { if (id !== charId) { pickChar(id); hud.toast?.(`SKIN EQUIPPED · ${id.toUpperCase()}`); sfx.play('whoosh'); quests.emit('skin', 1, { id }); } },
   onClose: () => { $('hud').hidden = false; start(); },
+  transition: (fn) => fx.through(fn, 220, 450),
+  getCards: () => collectionCards(),
+  getStats: () => { const s = progress.s, rw = raffles.list.filter((r) => r.winner_user && r.winner_user === raffles.uid).length;
+    return [['LEVEL', s.level], ['PLAYTIME', `${s.playMin | 0}m`], ['RAFFLE WINS', rw], ['BAG RUN PB', (s.mg?.bagrun?.best | 0).toLocaleString()], ['TILE WINS', tileDrop.S.wins]]; },
+  onUse: (it) => {
+    if (it.url) { window.open(it.url, '_blank', 'noopener'); return; }
+    skins.toast(it.vault === 'wano' ? 'ENTER FREE AT THE WANO VAULT (EAST OF THE PLAZA) WITH A VERIFIED WALLET' : 'ENTER FREE AT THE KANTO VAULT (BULL RUN) WITH A VERIFIED WALLET');
+  },
 });
+// cards for the Collection: raffle slabs you won, and this week's prizes (locked) as something to play for
+function cardArt(vault) {
+  const c = document.createElement('canvas'); c.width = 300; c.height = 400; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 300, 400); gr.addColorStop(0, vault === 'wano' ? '#ff5a3d' : '#ffcb05'); gr.addColorStop(1, vault === 'wano' ? '#3a0d1a' : '#1a2a6e');
+  g.fillStyle = gr; g.fillRect(0, 0, 300, 400); g.fillStyle = 'rgba(255,255,255,.9)'; g.textAlign = 'center';
+  g.font = '800 170px Rajdhani, sans-serif'; g.fillText('?', 150, 250); g.font = '700 30px Rajdhani, sans-serif'; g.fillText('PRIZE TBA', 150, 330);
+  return c.toDataURL('image/png');
+}
+function collectionCards() {
+  const out = [], seen = new Set();
+  for (const r of raffles.list) {
+    const mine = !!r.winner_user && r.winner_user === raffles.uid;
+    if (!mine && r.status !== 'open') continue;
+    const pz = r.prize || {}, local = RWA_ASSETS.find((a) => a.mint && a.mint === pz.mint), V = r.vault === 'wano' ? 'Wano' : 'Kanto';
+    if (local) seen.add(local.mint);
+    out.push({ id: 'card:' + r.id, vault: r.vault, name: pz.name || 'Graded card', sub: pz.set || (r.vault === 'wano' ? 'Graded One Piece card' : 'Graded Pokémon card'),
+      cert: pz.cert ? `${pz.grader || ''} #${pz.cert}` : '', grade: { co: pz.grader || 'TBA', n: pz.grade || '?', word: pz.grade === '10' ? 'GEM MINT' : pz.grade ? 'GRADED' : 'TBA' },
+      img: local?.photo || cardArt(r.vault), slabPhoto: !!local?.photo, owned: mine, url: /^https:\/\//.test(pz.url || '') ? pz.url : null,
+      lock: mine ? null : `${V} Vault raffle prize · draw ${new Date(r.draws_at).toUTCString().slice(0, 22)} UTC`,
+      desc: mine ? 'You won this slab in the vault raffle. The team sends it to your verified wallet.' : `A real graded card in the ${V} Vault raffle. Entry is free with a verified wallet.` });
+  }
+  for (const a of RWA_ASSETS) if (!seen.has(a.mint)) out.push({ id: 'card:' + a.mint, vault: 'wano', name: a.name, sub: `${a.set} #${a.number}`, cert: `${a.grader} #${a.cert}`,
+    grade: { co: a.grader, n: a.grade, word: 'GEM MINT' }, img: a.photo, slabPhoto: true, owned: false, url: a.url, lock: 'Wano Vault raffle prize', desc: `Real ${a.grader} ${a.grade} slab vaulted on Solana by ${a.issuer}. Raffled at the Wano Vault.` });
+  return out;
+}
+const openCollection = () => {
+  if (skins.isOpen || inGame()) return;
+  sfx.play('whoosh');
+  fx.through(() => { $('hud').hidden = true; $('emotewheel').hidden = true; hud.closeModal(); skins.openNow('collection'); }, 220, 450);
+};
 // holder skins follow the verified wallet; a gated skin that's no longer held is taken off
 skins.onGate = () => { if (wallet.status !== 'verified') { skins.close(); if (!skins.isOpen) openWallet(); } };
 const syncHolder = () => {
@@ -1030,9 +1060,9 @@ const syncHolder = () => {
   }
 };
 wallet.onChange(syncHolder); syncHolder();
-const openSkins = () => { sfx.play('whoosh'); $('loader').hidden = true; $('hud').hidden = true; $('emotewheel').hidden = true; hud.closeModal(); skins.open(); };
+const openSkins = () => { if (skins.isOpen) return; sfx.play('whoosh'); fx.through(() => { $('loader').hidden = true; $('hud').hidden = true; $('emotewheel').hidden = true; hud.closeModal(); skins.openNow('skins'); }, 220, 450); };
 if (params.has('autostart')) start(); else openSkins();
-window.__bagverse = { raffles, openVault, tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
+window.__bagverse = { fx, openCollection, raffles, openVault, tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
 
 // slow-frame guard: after a short warm-up, a few seconds under ~22 fps sheds the heaviest effects live
 // and remembers the lower tier for next time
@@ -1079,7 +1109,7 @@ function frame() {
   if (started) {
     if (input.hit('KeyK')) openSkins();
     if (input.hit('KeyM')) hud.mapOpen ? hud.closeMap() : hud.openMap(player.body.pos, mp.mapMates());
-    if (input.hit('KeyI')) inventory();
+    if (input.hit('KeyI')) openCollection();
     if (input.hit('KeyJ')) missionsUI.isOpen ? missionsUI.close() : missionsUI.open();
     if (input.hit('KeyG')) $('emotewheel').hidden = !$('emotewheel').hidden;
     if (input.hit('KeyN')) setLook(ORDER[(ORDER.indexOf(lookName) + 1) % ORDER.length]);
