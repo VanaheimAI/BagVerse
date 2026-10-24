@@ -3,6 +3,7 @@
 // linked to this player. The address and the signed message are kept in this browser and on the player's own
 // leaderboard row, so a server can verify ownership later (prizes, skin ownership). Nothing here moves funds.
 import { getWallets } from '@wallet-standard/app';
+import { session, tables } from './net.js';
 
 const KEY = 'bv_wallet';
 const CHAIN = 'solana:mainnet';
@@ -24,6 +25,9 @@ export class Wallet {
   constructor() {
     this.linked = load();            // { address, wallet, message, signature, at } once signed in
     this.wallet = null; this.account = null; this.listeners = new Set();
+    // server check (api/wallet/verify): 'none' | 'signed' (linked here, not verified) | 'verifying' | 'verified' | 'offline' (no server: claude.ai / local)
+    this.status = this.linked ? 'signed' : 'none'; this.skins = []; this.error = ''; this.ready = false;
+    this.loadServer();
     this.api = getWallets();
     this.api.on('register', () => { this.changed(); this.reconnect(); });
     if (ANDROID) this.mwa();
@@ -66,7 +70,44 @@ export class Wallet {
   }
 
   /** connect + sign in. Returns the linked record, or throws an Error with a readable message */
+  // ---------------------------------------------------------------- server side (Vercel api/wallet/*, Supabase public.wallets)
+  async server(path, body) {
+    const ses = await session(); if (!ses) return { status: 0, error: 'offline' };
+    try {
+      const r = await fetch('/api/wallet/' + path, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + ses.token }, body: JSON.stringify(body || {}) });
+      const ct = r.headers.get('content-type') || ''; const j = ct.includes('json') ? await r.json().catch(() => ({})) : {};
+      return { status: ct.includes('json') ? r.status : 0, ...j };   // no JSON = no API on this host
+    } catch (_) { return { status: 0, error: 'offline' }; }
+  }
+  /** on load: the verified wallet on record for this player (it also comes back after site data was cleared) */
+  async loadServer() {
+    const ses = await session();
+    if (!ses) { this.status = this.linked ? 'offline' : 'none'; this.ready = true; return this.changed(); }
+    this.uid = ses.uid;
+    let row = null;
+    try { const t = await tables(); row = t ? (await t.from('wallets').select('address, skins').eq('user_id', ses.uid).maybeSingle()).data : null; } catch (_) {}
+    if (row && !this.linked) { this.linked = { address: row.address, wallet: null, at: Date.now() }; store(this.linked); }
+    if (row && row.address === this.linked?.address) { this.status = 'verified'; this.skins = row.skins || []; }
+    else this.status = this.linked ? 'signed' : 'none';
+    this.ready = true; this.changed();
+    if (this.status === 'verified') this.refreshHoldings();
+  }
+  async refreshHoldings() {
+    const r = await this.server('holdings');
+    if (r.status === 200 && Array.isArray(r.skins) && r.address === this.linked?.address) { this.skins = r.skins; this.changed(); }
+  }
+  async verify() {
+    if (!this.linked?.signature) return false;
+    this.status = 'verifying'; this.error = ''; this.changed();
+    const { address, message, signature } = this.linked;
+    const r = await this.server('verify', { address, message, signature });
+    if (r.status === 200 && r.verified) { this.status = 'verified'; this.skins = r.skins || []; this.changed(); return true; }
+    this.status = r.status === 0 || r.status === 503 ? 'offline' : 'signed'; this.error = r.status === 0 ? '' : r.error || 'Verification failed.';
+    this.changed(); return false;
+  }
+
   async connect(w, playerName = 'Player') {
+    const ses = await session(), requestId = ses?.uid || '';
     const nonce = b58(crypto.getRandomValues(new Uint8Array(12)));
     const issuedAt = new Date().toISOString();
     const statement = `Link this wallet to BagVerse player ${playerName}. Signing is free and sends no transaction.`;
@@ -74,7 +115,7 @@ export class Wallet {
     try {
       const signIn = w.features['solana:signIn'];
       if (signIn) {
-        const [out] = await signIn.signIn({ domain: location.host, statement, uri: location.origin, version: '1', nonce, issuedAt, chainId: 'mainnet' });
+        const [out] = await signIn.signIn({ domain: location.host, statement, uri: location.origin, version: '1', nonce, issuedAt, chainId: 'mainnet', ...(requestId ? { requestId } : {}) });
         address = out.account.address; message = new TextDecoder().decode(out.signedMessage); signature = b58(out.signature);
         this.attach(w, out.account);
       } else {
@@ -83,7 +124,7 @@ export class Wallet {
         address = acc.address;
         const sm = w.features['solana:signMessage'];
         if (!sm) throw new Error(`${w.name} can't sign messages, so the link can't be verified. Try another wallet.`);
-        message = `${location.host} wants you to sign in with your Solana account:\n${address}\n\n${statement}\n\nURI: ${location.origin}\nVersion: 1\nChain ID: mainnet\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
+        message = `${location.host} wants you to sign in with your Solana account:\n${address}\n\n${statement}\n\nURI: ${location.origin}\nVersion: 1\nChain ID: mainnet\nNonce: ${nonce}\nIssued At: ${issuedAt}${requestId ? `\nRequest ID: ${requestId}` : ''}`;
         const [res] = await sm.signMessage({ account: acc, message: new TextEncoder().encode(message) });
         signature = b58(res.signature);
         this.attach(w, acc);
@@ -94,10 +135,15 @@ export class Wallet {
       throw new Error(msg.slice(0, 160));
     }
     this.linked = { address, wallet: w.name, message, signature, at: Date.now() };
-    store(this.linked); this.changed();
+    store(this.linked); this.status = 'signed'; this.skins = []; this.changed();
+    await this.verify();
     return this.linked;
   }
-  unlink() { this.linked = null; store(null); this.changed(); }
+  unlink() {
+    const had = this.status === 'verified';
+    this.linked = null; store(null); this.status = 'none'; this.skins = []; this.error = ''; this.changed();
+    if (had && this.uid) tables().then(async (t) => { await t?.from('wallets').delete().eq('user_id', this.uid); }).catch(() => {});   // RLS: players may delete their own row
+  }
   async disconnect(callWallet = true) {
     const w = this.wallet; this.offEvents?.(); this.offEvents = null; this.wallet = null; this.account = null;
     if (callWallet) try { await w?.features['standard:disconnect']?.disconnect(); } catch (_) {}

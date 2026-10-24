@@ -19,6 +19,19 @@ let sb = null, supa = null;
 if (typeof window !== 'undefined') queueMicrotask(() => console.info('BagVerse online backend:', backend()));   // which services this build uses
 export function backend() { return typeof window !== 'undefined' && window.claude?.use ? 'claude' : URL_ && KEY ? 'supabase' : 'none'; }
 
+/** the signed-in Supabase account, for calls to this site's own API (/api/...): { uid, token } or null */
+export async function session() {
+  if (backend() !== 'supabase') return null;
+  supa ||= initSupabase(); await supa; if (!sb) return null;
+  try { const { data } = await sb.auth.getSession(); const s = data?.session; return s?.access_token ? { uid: s.user.id, token: s.access_token } : null; } catch (_) { return null; }
+}
+/** Supabase tables: { from(name) } (reads; writes follow each table's RLS rules), or null off Supabase.
+ *  (Wrapped on purpose: a query builder is a thenable, so returning one from an async function would run it.) */
+export async function tables() {
+  if (backend() !== 'supabase') return null;
+  supa ||= initSupabase(); await supa; return sb ? { from: (name) => sb.from(name) } : null;
+}
+
 /** claude.ai capability or its Supabase equivalent; null when there is no online service */
 export async function use(name) {
   const c = typeof window !== 'undefined' ? window.claude : null;

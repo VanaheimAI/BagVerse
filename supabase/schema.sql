@@ -33,3 +33,24 @@ create policy "lb update own" on public.lb for update to authenticated using (id
 -- light sanity limits on what a client can claim (scores are still self-reported)
 alter table public.lb drop constraint if exists lb_sane;
 alter table public.lb add constraint lb_sane check (wbest between 0 and 100000 and dbest between 0 and 100000 and wins between 0 and 100000 and pg_column_size(doc) < 4096);
+
+-- ---------------------------------------------------------------- linked Solana wallets (Oct 24)
+-- Written only by the server (Vercel functions in api/wallet/, using the service_role key) after it checks the
+-- wallet's signature, so a row here means "this player proved they own this wallet". skins = gated skins the wallet
+-- unlocks (see src/nft-gates.js). One player per wallet: verifying it from another account moves it.
+create table if not exists public.wallets (
+  user_id      text primary key,               -- the player's auth user id
+  address      text not null unique,           -- base58 Solana address
+  verified_at  timestamptz not null default now(),
+  message      text,                           -- the signed sign-in message
+  signature    text,                           -- base58 Ed25519 signature
+  nonce        text,
+  skins        text[] not null default '{}',
+  holdings_at  timestamptz
+);
+alter table public.wallets enable row level security;
+drop policy if exists "wallets read" on public.wallets;
+create policy "wallets read" on public.wallets for select using (true);
+-- players can unlink (delete their own row); creating or changing rows is server-only (no insert/update policy)
+drop policy if exists "wallets delete own" on public.wallets;
+create policy "wallets delete own" on public.wallets for delete to authenticated using (user_id = auth.uid()::text);

@@ -1,6 +1,7 @@
 // Skin selection screen: 3D pedestal preview (drag to rotate), skin info, card grid with live-rendered portraits,
 // filters (All / Owned / Unlocked / Favorites) and Back / Shop / Equip. Shown after loading and in game (K).
 // The preview renders with the main renderer into the main canvas while the screen is open (no second GL context).
+import { gateFor } from './nft-gates.js';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { makeCharacter } from './player.js';
@@ -447,6 +448,19 @@ export class SkinScreen {
   }
 
   skin(id) { return SKINS.find((s) => s.id === id); }
+  /** holder skins (src/nft-gates.js): unlocked only for the skins the server says this player's verified wallet holds */
+  setHolderSkins(list = [], walletReady = false) {
+    this.walletReady = walletReady;
+    for (const s of SKINS) {
+      const g = gateFor(s.id); if (!g) continue;
+      s.gate = g; s.baseOwned ??= s.owned;
+      s.owned = s.baseOwned && list.includes(s.id);
+      s.lock = s.owned ? null : g.label || 'HOLDER SKIN';
+      const c = this.el?.querySelector(`[data-skin="${s.id}"]`);
+      if (c) { c.outerHTML = this.cardHtml(s); const img = this.el.querySelector(`[data-skin="${s.id}"] img`); if (img && this.thumbs[s.id]) img.src = this.thumbs[s.id]; }
+    }
+    if (this.isOpen) { this.setFilter(this.filter); this.select(this.sel); }
+  }
   unlocked(s) { return s.owned || (s.level != null && this.getLevel() >= s.level); }
   visibleSkins() {
     return SKINS.filter((s) => this.filter === 'all' || (this.filter === 'owned' && s.owned)
@@ -478,7 +492,9 @@ export class SkinScreen {
     });
     this.el.querySelector(`[data-skin="${id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
     const btn = this.$('sk-equip');
-    if (!s.owned) {
+    if (!s.owned && s.gate) {   // holder skin: the button leads to the wallet
+      btn.disabled = false; btn.textContent = this.walletReady ? 'HOLDERS ONLY' : 'CONNECT WALLET';
+    } else if (!s.owned) {
       btn.disabled = true;
       btn.textContent = s.lock ? 'LOCKED' : this.unlocked(s) ? 'COMING SOON' : `LOCKED · LV ${s.level}`;
     } else { btn.disabled = false; btn.textContent = id === eq ? 'EQUIPPED ✓' : 'EQUIP SKIN'; }
@@ -539,6 +555,7 @@ export class SkinScreen {
   equip() {
     if (!this.commitName()) return;
     const s = this.skin(this.sel);
+    if (s && !s.owned && s.gate) { this.toast(String(s.lock).toUpperCase()); this.onGate?.(s); return; }
     if (!s || !s.owned) { this.toast(s?.lock ? s.lock.toUpperCase() : 'SKIN LOCKED'); return; }
     if (!this.chars[s.id]) { this.select(s.id); return; }   // still loading (or retry after a failed load)
     this.onEquip(s.id);

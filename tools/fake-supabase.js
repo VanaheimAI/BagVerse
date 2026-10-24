@@ -4,7 +4,7 @@
 export function createClient() {
   let uid = sessionStorage.getItem('fake.uid'); if (!uid) { uid = 'uid-' + Math.random().toString(36).slice(2, 8); sessionStorage.setItem('fake.uid', uid); }
   const table = () => JSON.parse(localStorage.getItem('fake.lb') || '{}'), save = (t) => localStorage.setItem('fake.lb', JSON.stringify(t));
-  const auth = { getSession: async () => ({ data: { session: null } }), signInAnonymously: async () => ({ data: { user: { id: uid } }, error: null }) };
+  const auth = { getSession: async () => ({ data: { session: { access_token: 'tok-' + uid, user: { id: uid } } } }), signInAnonymously: async () => ({ data: { user: { id: uid } }, error: null }) };
   function channel(name, opts) {
     const bc = new BroadcastChannel('fake-rt-' + name), key = opts.config.presence.key, handlers = { sync: [], join: [], mv: [] };
     const presence = {}; let mine = null;
@@ -24,7 +24,17 @@ export function createClient() {
     };
     return ch;
   }
+  // `wallets` lives on the test server (tools/wallet_server.mjs), like the real table the API writes
+  const xhr = (method, url, body) => { const x = new XMLHttpRequest(); x.open(method, url, false); x.send(body ? JSON.stringify(body) : null); try { return JSON.parse(x.responseText); } catch (_) { return []; } };
   function from(name) {
+    if (name === 'wallets') {
+      const eqs = []; let del = false;
+      const run = () => xhr('GET', '/__fake/wallets').filter((r) => eqs.every(([c, v]) => r[c] === v));
+      const w = { select: () => w, eq: (c, v) => (eqs.push([c, v]), w), delete: () => ((del = true), w),
+        maybeSingle: async () => ({ data: run()[0] || null, error: null }),
+        then: (res, rej) => { if (del) { if (eqs.some(([c, v]) => c === 'user_id' && v === uid)) xhr('POST', '/__fake/wallets/delete', { user_id: uid }); return Promise.resolve({ error: null }).then(res, rej); } return Promise.resolve({ data: run(), error: null }).then(res, rej); } };
+      return w;
+    }
     const q = { eqs: [], ord: null, lim: 1000 };
     const run = () => { let rows = Object.values(table()); for (const [c, v] of q.eqs) rows = rows.filter((r) => r[c] === v); for (const [c, v] of q.gts || []) rows = rows.filter((r) => r[c] > v);
       if (q.ord) rows.sort((a, b) => (q.ord.asc ? 1 : -1) * ((a[q.ord.c] ?? 0) - (b[q.ord.c] ?? 0))); return rows.slice(0, q.lim); };

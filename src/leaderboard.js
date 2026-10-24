@@ -10,8 +10,8 @@ import { weekKey, dayKey } from './progression.js';
 import { use } from './net.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-// linked Solana wallet: address + the signed sign-in message, so a server can verify ownership later (null = none)
-const walletFields = (L) => (L.wallet?.address ? { w: String(L.wallet.address).slice(0, 44), wp: { m: String(L.wallet.message).slice(0, 600), s: String(L.wallet.signature).slice(0, 100) } } : { w: null, wp: null });
+// verified Solana wallet address (proof lives server-side in public.wallets), null when none
+const walletFields = (L) => ({ w: L.wallet?.address ? String(L.wallet.address).slice(0, 44) : null, wp: undefined });
 const num = (v) => (typeof v === 'number' && isFinite(v) ? Math.max(0, Math.min(1e7, v)) : 0);
 
 export class Leaderboard {

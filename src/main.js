@@ -20,7 +20,7 @@ import { acceleratedRaycast } from 'three-mesh-bvh';
 import { Input } from './input.js';
 import { World } from './world.js';
 import { RWA_ASSETS, shortMint } from './rwa.js';
-import { SkinScreen } from './skins.js';
+import { SkinScreen, SKINS } from './skins.js';
 import { Player, FollowCamera, say, setEmoteLoader, ensureClip, twoBoneIK, armChains } from './player.js';
 import { Crowd } from './npcs.js';
 import { Car } from './vehicle.js';
@@ -34,6 +34,7 @@ import { BagRun, RunUI } from './minigames/bagrun.js';
 import { Multiplayer } from './multiplayer.js';
 import { Leaderboard } from './leaderboard.js';
 import { Wallet, short as shortAddr, MOBILE as WALLET_MOBILE } from './wallet.js';
+import { NFT_GATES, gateFor } from './nft-gates.js';
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 const $ = (id) => document.getElementById(id);
@@ -452,15 +453,26 @@ wallet.onChange(() => { walletLabel(); if (hud.modalOpen && document.querySelect
 walletLabel();
 function openWallet() {
   const a = wallet.address;
-  if (a) {
+  const repick = wallet.repick; wallet.repick = false;
+  if (a && !repick) {
+    const st = wallet.status;
+    const stHtml = { verified: '<b style="color:#14f195">VERIFIED ✓</b>', verifying: '<b style="color:#ffc83d">VERIFYING…</b>', offline: '<b style="color:#ffc83d">SIGNED · NOT CHECKED HERE</b>' }[st] || '<b style="color:#ff9f43">NOT VERIFIED</b>';
+    const gated = NFT_GATES.map((g) => g.skin);
+    const holder = gated.length ? `<div class="row"><span>Holder skins</span><b>${wallet.skins.length ? wallet.skins.map((id) => escH(SKINS.find((k) => k.id === id)?.name || id)).join(', ') : st === 'verified' ? 'None in this wallet' : '—'}</b></div>` : '';
+    const note = st === 'verified' ? `Verified by the BagVerse server: this wallet belongs to <b>${escH(progress.s.name || 'you')}</b>. Raffle entries, billboard rentals and skin ownership will use it.`
+      : st === 'offline' ? 'This copy of the game has no verification server, so the link only counts here. Open the game on its website to verify.'
+      : st === 'verifying' ? 'Checking the signature…'
+      : `The server couldn't verify this link${wallet.error ? `: <b>${escH(wallet.error)}</b>` : '.'} Sign again to verify (free, no transaction).`;
     hud.modal('◎ SOLANA WALLET', `<div class="wl">
-      <div class="row"><span>Wallet</span><b>${escH(wallet.linked.wallet)}</b></div>
+      <div class="row"><span>Wallet</span><b>${escH(wallet.linked.wallet || 'Linked wallet')}</b></div>
       <div class="row"><span>Address</span><b class="wl-addr" title="${a}">${shortAddr(a)}</b></div>
-      <div class="row"><span>Status</span><b style="color:#7cff3d">LINKED · SIGNED ✓</b></div>
-      <p style="opacity:.75">This wallet is linked to <b>${escH(progress.s.name || 'you')}</b>. Raffle entries, billboard rentals and skin ownership will use it when the blockchain phase goes live.</p>
-      <div class="wl-acts"><button data-w="copy">COPY ADDRESS</button><a class="wl-btn" href="https://solscan.io/account/${a}" target="_blank" rel="noopener">VIEW ON SOLSCAN</a><button class="ghost" data-w="off">DISCONNECT</button></div></div>`);
+      <div class="row"><span>Status</span>${stHtml}</div>${holder}
+      <p style="opacity:.75">${note}</p>
+      <div class="wl-acts">${st === 'signed' ? '<button data-w="again">SIGN AGAIN</button>' : ''}${st === 'verified' && gated.length ? '<button class="ghost" data-w="refresh">REFRESH HOLDINGS</button>' : ''}<button data-w="copy">COPY ADDRESS</button><a class="wl-btn" href="https://solscan.io/account/${a}" target="_blank" rel="noopener">VIEW ON SOLSCAN</a><button class="ghost" data-w="off">DISCONNECT</button></div></div>`);
     document.querySelector('[data-w=copy]').onclick = () => navigator.clipboard?.writeText(a).then(() => hud.toast('ADDRESS COPIED'), () => {});
     document.querySelector('[data-w=off]').onclick = async () => { await wallet.disconnect(); lb.saveProfile(); hud.toast('WALLET DISCONNECTED'); hud.closeModal(); };
+    const again = document.querySelector('[data-w=again]'); if (again) again.onclick = () => { wallet.repick = true; openWallet(); };
+    const rf = document.querySelector('[data-w=refresh]'); if (rf) rf.onclick = async () => { rf.disabled = true; rf.textContent = 'CHECKING…'; await wallet.refreshHoldings(); hud.toast('HOLDINGS UPDATED'); };
     return;
   }
   const ws = wallet.list();
@@ -477,8 +489,11 @@ function openWallet() {
     document.querySelectorAll('[data-wi]').forEach((x) => (x.disabled = true)); b.classList.add('busy'); err.hidden = true;
     try {
       const L = await wallet.connect(ws[+b.dataset.wi], progress.s.name || 'Player');
-      lb.saveProfile(); hud.toast('WALLET LINKED · ' + shortAddr(L.address)); sfx.play('ping');
-      hud.chat('SYSTEM', 'BagVerse', `Wallet ${shortAddr(L.address)} linked to ${progress.s.name || 'you'}.`, '#7cff3d');
+      lb.saveProfile(); sfx.play('ping');
+      const v = wallet.status === 'verified', n = wallet.skins.length;
+      hud.toast(v ? 'WALLET VERIFIED · ' + shortAddr(L.address) : 'WALLET LINKED · ' + shortAddr(L.address));
+      hud.chat('SYSTEM', 'BagVerse', `Wallet ${shortAddr(L.address)} ${v ? 'verified for' : 'linked to'} ${progress.s.name || 'you'}.${n ? ` Holder skins unlocked: ${n}.` : ''}`, '#7cff3d');
+      openWallet();
     } catch (e) {
       if (!document.querySelector('.wl-err')) return;
       err.textContent = e.message; err.hidden = false;
@@ -509,7 +524,7 @@ mp.onGoTo = (p) => {
   player.teleport(p); hud.toast('TELEPORTED TO PLAYER');
 };
 // shared Bag Run leaderboard (claude.ai db: one row per player, everyone reads, each writes their own)
-const lb = new Leaderboard({ hud, getLocal: () => ({ name: progress.s.name, skin: charId, level: progress.s.level, wallet: wallet.linked }) });
+const lb = new Leaderboard({ hud, getLocal: () => ({ name: progress.s.name, skin: charId, level: progress.s.level, wallet: wallet.status === 'verified' ? wallet.linked : null }) });
 lb.init();
 // a name saved online (same account on another device) fills in a browser that has none yet
 lb.onMine = (row) => { if (!progress.s.nameSet && row && typeof row.n === 'string' && row.n.length >= 2) { progress.s.name = row.n.replace(/[^\w.-]/g, '').slice(0, 16); progress.s.nameSet = true; progress.save(); player.refreshPlate(profile()); const f = document.getElementById('sk-pname'); if (f && !f.value) f.value = progress.s.name; } };
@@ -890,6 +905,15 @@ const skins = new SkinScreen({
   onEquip: (id) => { if (id !== charId) { pickChar(id); hud.toast?.(`SKIN EQUIPPED · ${id.toUpperCase()}`); sfx.play('whoosh'); quests.emit('skin', 1, { id }); } },
   onClose: () => { $('hud').hidden = false; start(); },
 });
+// holder skins follow the verified wallet; a gated skin that's no longer held is taken off
+skins.onGate = () => { if (wallet.status !== 'verified') { skins.close(); if (!skins.isOpen) openWallet(); } };
+const syncHolder = () => {
+  skins.setHolderSkins(wallet.skins, wallet.status === 'verified');
+  if (wallet.ready && wallet.status !== 'verifying' && gateFor(charId) && !(wallet.status === 'verified' && wallet.skins.includes(charId))) {
+    pickChar('goldenking'); hud.toast('HOLDER SKIN NEEDS ITS NFT · SWITCHED TO GOLDEN KING');
+  }
+};
+wallet.onChange(syncHolder); syncHolder();
 const openSkins = () => { sfx.play('whoosh'); $('loader').hidden = true; $('hud').hidden = true; $('emotewheel').hidden = true; hud.closeModal(); skins.open(); };
 if (params.has('autostart')) start(); else openSkins();
 window.__bagverse = { wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
