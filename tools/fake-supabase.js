@@ -6,21 +6,24 @@ export function createClient() {
   const table = () => JSON.parse(localStorage.getItem('fake.lb') || '{}'), save = (t) => localStorage.setItem('fake.lb', JSON.stringify(t));
   const auth = { getSession: async () => ({ data: { session: { access_token: 'tok-' + uid, user: { id: uid } } } }), signInAnonymously: async () => ({ data: { user: { id: uid } }, error: null }) };
   function channel(name, opts) {
-    const bc = new BroadcastChannel('fake-rt-' + name), key = opts.config.presence.key, handlers = { sync: [], join: [], mv: [] };
+    const bc = new BroadcastChannel('fake-rt-' + name), key = opts.config.presence.key, handlers = { sync: [], join: [], leave: [], bc: {} };
+    const calls = [];   // like the real limit: 5 presence calls per client per 30 s (extra calls are dropped); ?fakenopresence drops them all
     const presence = {}; let mine = null;
     const sync = () => handlers.sync.forEach((f) => f());
     bc.onmessage = (e) => { const m = e.data;
       if (m.t === 'track') { const isNew = !presence[m.key]; presence[m.key] = [m.meta]; sync(); if (isNew) handlers.join.forEach((f) => f({ key: m.key })); }
-      if (m.t === 'leave') { delete presence[m.key]; sync(); }
+      if (m.t === 'leave') { delete presence[m.key]; sync(); handlers.leave.forEach((f) => f({ key: m.key })); }
       if (m.t === 'hello' && mine) bc.postMessage({ t: 'track', key, meta: mine });
-      if (m.t === 'bc') handlers.mv.forEach((f) => f({ payload: m.payload })); };
+      if (m.t === 'bc') (handlers.bc[m.event] || []).forEach((f) => f({ payload: m.payload })); };
     const ch = {
-      on(type, filter, fn) { if (type === 'presence') handlers[filter.event]?.push(fn); if (type === 'broadcast') handlers.mv.push(fn); return ch; },
+      on(type, filter, fn) { if (type === 'presence') handlers[filter.event]?.push(fn); if (type === 'broadcast') (handlers.bc[filter.event] ||= []).push(fn); return ch; },
       subscribe(cb) { setTimeout(() => { cb('SUBSCRIBED'); bc.postMessage({ t: 'hello' }); }, 50); return ch; },
       presenceState: () => ({ ...presence }),
-      track: async (meta) => { mine = meta; presence[key] = [meta]; bc.postMessage({ t: 'track', key, meta }); sync(); return 'ok'; },
+      track: async (meta) => { const now = Date.now(); while (calls.length && now - calls[0] > 30000) calls.shift(); calls.push(now); window.__presenceCalls = (window.__presenceCalls || 0) + 1;
+        if (calls.length > 5 || /fakenopresence/.test(location.search)) { window.__presenceDropped = (window.__presenceDropped || 0) + 1; return 'ok'; }
+        mine = meta; presence[key] = [meta]; bc.postMessage({ t: 'track', key, meta }); sync(); return 'ok'; },
       untrack: async () => { bc.postMessage({ t: 'leave', key }); },
-      send: async (m) => { bc.postMessage({ t: 'bc', payload: m.payload }); return 'ok'; },
+      send: async (m) => { bc.postMessage({ t: 'bc', event: m.event, payload: m.payload }); return 'ok'; },
     };
     return ch;
   }

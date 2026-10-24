@@ -663,3 +663,11 @@ The Wano Vault (graded One Piece) and Kanto Vault (graded Pokémon) now run real
   - Filters: ALL / OWNED / CARDS / FAVORITES. Stats under the info: slabs owned, level, playtime, raffle wins, Bag Run best, Tile Drop wins.
 - **Fades** (`src/fx.js`): a veil above everything. `fx.through(fn)` fades out, runs fn, fades in; used for opening and closing the skin screen and the Collection and for starting Bag Run / Tile Drop. `fx.cut()` fades in after any teleport longer than 25 m (fast travel, go-to-teammate, leaving a mini-game). Modals and the big map fade and rise in. Fades are off in tests (`fixeddt`) and with `?nofade`.
 - Test: `tools/collection_test.mjs`.
+
+## Multiplayer within Supabase Realtime limits (Oct 24)
+Players "losing" each other came from going over Supabase Realtime's Free-plan limits: **100 messages/s for the whole project, counting every message sent and every copy delivered**, 20 presence messages/s, and **5 presence calls per client per 30 s**. Movement at 6/s from every player, plus a presence update on every chat line, race score and Tile Drop tile, went over once a few teammates were on; Supabase then disconnects clients (`tenant_events`) or drops presence updates, and players vanish for each other. The room shim in `src/net.js` now:
+- uses **presence only for "who is here"** (name, skin, level and a starting spot), tracked at most once per 8 s;
+- sends everything else as **broadcasts**: `mv` movement (rate = 60 / players² per second, 6/s max, only while moving), `st` state (chat, races, flashmob, Tile Drop tiles; on change, at most 2/s), `hb` heartbeat (state + spot every 4–15 s depending on room size), `bye` on leaving;
+- counts a player as **here while presence lists them or they were heard in the last 15 s**, so a dropped presence update never hides someone who is still playing, and a newcomer appears from their first message;
+- sends velocity with each move; other screens keep a player gliding along it for up to 1.5 s, so slower update rates in a big room still look smooth.
+`window.__rtStats()` shows messages sent/received and the current movement rate. Test: `tools/mp_persist_test.mjs` (3 players on the fake client, one with every presence call dropped).

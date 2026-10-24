@@ -601,6 +601,7 @@ const mp = new Multiplayer({
   getLocal: () => ({
     name: progress.s.name, tag: profile().tag, level: progress.s.level, skin: charId,
     pos: player.root.position, yaw: player.facing, speed: player.speed || 0,
+    vel: veh ? { x: Math.sin(veh.h) * veh.v, z: Math.cos(veh.h) * veh.v } : { x: player.body.vel.x, z: player.body.vel.z },
     anim: veh === scooter && veh ? 'Ride' : player.c.anim.current?.getClip().name || 'Idle',
     ride: veh && veh === scooter ? { x: veh.pos.x, y: veh.pos.y, z: veh.pos.z, h: veh.h, p: veh.pitch, o: veh.roll, sp: veh.v } : null,
   }),

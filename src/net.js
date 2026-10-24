@@ -12,7 +12,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL, KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const CHANNEL = 'bagverse-world';
-const MOVE_KEYS = new Set(['x', 'y', 'z', 'h', 'a', 'sp', 'r']);   // high-rate fields: broadcast, not presence
+const MOVE_KEYS = new Set(['x', 'y', 'z', 'h', 'a', 'sp', 'r', 'vx', 'vz']);   // high-rate fields (movement broadcast)
 const MOVE_HZ = 6;
 
 let sb = null, supa = null;
@@ -59,73 +59,127 @@ async function initSupabase() {
 }
 
 // ---------------------------------------------------------------- room (Supabase Realtime presence + broadcast)
+// Built to stay inside Supabase Realtime's limits (Free plan: 100 messages/s for the whole project, counted as
+// every message sent AND every copy delivered; 20 presence messages/s; 5 presence calls per client per 30 s).
+// Going over disconnects everyone ("tenant_events") and players vanish for each other, so:
+//   - presence is only for "who is here": a tiny { by, s: name/skin/level + spot } tracked at most once per 8 s;
+//   - everything else is broadcast: 'mv' movement (rate shrinks with the room: ~60 / players² per second, only while
+//     moving), 'st' state (chat line, races, flashmob; on change, at most ~2/s), 'hb' heartbeat (state + spot, every
+//     few seconds, slower in a big room), 'bye' on leaving;
+//   - a peer counts as here while presence lists them OR we heard from them in the last 15 s, so a dropped presence
+//     update never hides someone who is clearly still playing, and a newcomer is drawn from their first message.
+const BASIC = ['v', 'n', 'tag', 'lv', 'skin', 'id'];
+const HEARD_MS = 15000;
 function makeRoom(userId) {
   const peer = 'p' + Math.random().toString(36).slice(2, 10);   // one per open tab, like claude.ai's peer label
   const ch = sb.channel(CHANNEL, { config: { presence: { key: peer }, broadcast: { self: false } } });
-  const state = new Map();     // peer -> { by, presence, updatedAt }
-  let mine = {}, slow = {}, trackedKey = '', online = false, lastMove = 0, moveTimer = 0, snap = Object.freeze([]);
+  const state = new Map();     // peer -> { by, tracked, slow, move, inPresence, heard, presence }
+  let mine = {}, online = false, snap = Object.freeze([]);
   const peerFns = new Set(), connFns = new Set();
+  const stats = { sent: 0, got: 0, t0: performance.now() };
   let queued = false;
   const emit = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; rebuild(); peerFns.forEach((f) => f({ peers: snap, joined: [], left: [], updated: [] })); }); };
   const rebuild = () => {
     const list = [{ peer, by: userId, isMe: true, sameTab: true, kind: 'viewer', guest: false, presence: Object.freeze({ ...mine }), updatedAt: Date.now() }];
-    for (const [p, v] of state) if (p !== peer) list.push({ peer: p, by: v.by || null, isMe: v.by && v.by === userId, sameTab: false, kind: 'viewer', guest: false, presence: Object.freeze({ ...v.presence }), updatedAt: v.updatedAt });
+    for (const [p, v] of state) if (p !== peer) list.push({ peer: p, by: v.by || null, isMe: !!v.by && v.by === userId, sameTab: false, kind: 'viewer', guest: false, presence: Object.freeze({ ...v.presence }), updatedAt: v.heard });
     snap = Object.freeze(list);
   };
+  const entry = (p, by) => {
+    let cur = state.get(p);
+    if (!cur) { cur = { by: null, tracked: {}, slow: {}, move: {}, inPresence: false, heard: Date.now(), presence: {} }; state.set(p, cur); }
+    if (typeof by === 'string') cur.by = by;
+    return cur;
+  };
+  // tracked basics + latest state + latest movement (movement wins over the tracked spot once it flows)
+  const merge = (cur) => { cur.presence = { ...cur.tracked, ...cur.slow, ...cur.move }; };
+  const count = () => 1 + [...state.keys()].filter((p) => p !== peer).length;
+
   ch.on('presence', { event: 'sync' }, () => {
+    stats.got++;
     const ps = ch.presenceState(), seen = new Set();
     for (const [p, metas] of Object.entries(ps)) {
+      if (p === peer) continue;
       const m = metas[metas.length - 1] || {}; seen.add(p);
-      const known = state.has(p), cur = state.get(p) || { presence: {} };
-      cur.by = typeof m.by === 'string' ? m.by : null;
-      // presence carries a position snapshot from when it was last tracked; once a peer's live movement is
-      // flowing it is newer, so the snapshot must not drag them back (that left idle teammates "stuck" elsewhere)
-      const tracked = m.s || {};
-      // only a peer we already have a LIVE position for keeps it; anyone else (new, or whose first announcement was
-      // still empty) takes the tracked position, or they would count as online but never be drawn
-      const hasPos = known && typeof cur.presence.x === 'number';
-      const slowOnly = hasPos ? Object.fromEntries(Object.entries(tracked).filter(([k]) => !MOVE_KEYS.has(k))) : tracked;
-      cur.presence = { ...cur.presence, ...slowOnly }; cur.updatedAt = Date.now();
-      state.set(p, cur);
+      const cur = entry(p, m.by); cur.inPresence = true; cur.tracked = m.s && typeof m.s === 'object' ? m.s : {}; merge(cur);
     }
-    for (const p of [...state.keys()]) if (!seen.has(p)) state.delete(p);
-    emit();
+    for (const [p, cur] of state) if (!seen.has(p)) cur.inPresence = false;
+    prune(); emit();
   });
-  ch.on('presence', { event: 'join' }, ({ key }) => { if (key !== peer) { trackedKey = ''; sendSlow(); sendMove(true); } });   // newcomers get our current spot
-  ch.on('broadcast', { event: 'mv' }, ({ payload }) => {
+  ch.on('presence', { event: 'join' }, ({ key }) => { if (key !== peer) setTimeout(() => { sendState(true); sendMove(true); }, 200 + Math.random() * 800); });   // newcomers get our state and spot
+  ch.on('presence', { event: 'leave' }, ({ key }) => { const cur = state.get(key); if (cur && Date.now() - cur.heard > 6000) { state.delete(key); emit(); } });
+  const hear = (event, fn) => ch.on('broadcast', { event }, ({ payload }) => {
+    stats.got++;
     const p = payload?.p; if (typeof p !== 'string' || p === peer) return;
-    const cur = state.get(p); if (!cur) return;   // movement only for peers present in the room
-    cur.presence = { ...cur.presence, ...(payload.m || {}) }; cur.updatedAt = Date.now(); emit();
+    const cur = entry(p, payload.b); cur.heard = Date.now(); fn(cur, payload); merge(cur); emit();
   });
+  hear('mv', (cur, pl) => { if (pl.m && typeof pl.m === 'object') cur.move = { ...cur.move, ...pl.m }; });
+  hear('st', (cur, pl) => { if (pl.s && typeof pl.s === 'object') cur.slow = pl.s; });
+  hear('hb', (cur, pl) => { if (pl.s && typeof pl.s === 'object') cur.slow = pl.s; if (pl.m && typeof pl.m === 'object') cur.move = { ...cur.move, ...pl.m }; });
+  ch.on('broadcast', { event: 'bye' }, ({ payload }) => { stats.got++; if (payload?.p && payload.p !== peer) { state.delete(payload.p); emit(); } });
+  const prune = () => { const now = Date.now(); for (const [p, cur] of state) if (!cur.inPresence && now - cur.heard > HEARD_MS) state.delete(p); };
+  setInterval(() => { const n = state.size; prune(); if (state.size !== n) emit(); }, 3000);
+
   ch.subscribe((status) => {
     const on = status === 'SUBSCRIBED';
     if (on !== online) { online = on; connFns.forEach((f) => f(on)); }
-    if (on) { trackedKey = ''; sendSlow(); sendMove(true); }
+    if (on) { lastTracked = ''; track(); sendState(true); sendMove(true); }
+    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('multiplayer: realtime', status);
   });
-  const sendSlow = () => {
-    const k = JSON.stringify(slow); if (k === trackedKey || !online || !Object.keys(slow).length) return;   // nothing to announce yet
-    trackedKey = k; ch.track({ by: userId, s: { ...slow, ...pick(mine, MOVE_KEYS) } }).catch(() => {});
+  const send = (event, payload) => { if (!online) return; stats.sent++; ch.send({ type: 'broadcast', event, payload: { p: peer, b: userId, ...payload } }).catch(() => {}); };
+  const pick = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => keys.has(k)));
+  const slowOf = () => Object.fromEntries(Object.entries(mine).filter(([k]) => !MOVE_KEYS.has(k)));
+
+  // presence: basics only, rate-limited (5 calls / 30 s / client is the hard cap)
+  let lastTracked = '', lastTrackAt = -1e9, trackTimer = 0;
+  const track = () => {
+    if (!online) return;
+    const basics = Object.fromEntries(BASIC.filter((k) => mine[k] !== undefined).map((k) => [k, mine[k]]));
+    if (!Object.keys(basics).length) return;
+    const body = { ...basics, ...pick(mine, new Set(['x', 'y', 'z', 'h'])) }, k = JSON.stringify(basics);
+    if (k === lastTracked) return;
+    const wait = 8000 - (performance.now() - lastTrackAt);
+    if (wait > 0) { if (!trackTimer) trackTimer = setTimeout(() => { trackTimer = 0; track(); }, wait); return; }
+    lastTracked = k; lastTrackAt = performance.now(); stats.sent++;
+    ch.track({ by: userId, s: body }).catch(() => { lastTracked = ''; });
   };
+  // state: on change, at most every 500 ms (trailing)
+  let lastState = '', lastStateAt = -1e9, stateTimer = 0;
+  const sendState = (force) => {
+    const s = slowOf(), k = JSON.stringify(s);
+    if (!online || !Object.keys(s).length || (!force && k === lastState)) return;
+    const wait = 500 - (performance.now() - lastStateAt);
+    if (wait > 0 && !force) { if (!stateTimer) stateTimer = setTimeout(() => { stateTimer = 0; sendState(false); }, wait); return; }
+    lastState = k; lastStateAt = performance.now(); send('st', { s });
+  };
+  // movement: the rate shrinks with the room so the whole project stays under ~60 messages/s
+  let lastMove = -1e9, moveTimer = 0, lastMoveKey = '';
+  const moveGap = () => { const n = count(); return 1000 / Math.max(0.5, Math.min(MOVE_HZ, 60 / (n * n))); };
   const sendMove = (force) => {
     if (!online) return;
-    const now = performance.now(), gap = 1000 / MOVE_HZ;
-    if (!force && now - lastMove < gap) { if (!moveTimer) moveTimer = setTimeout(() => { moveTimer = 0; sendMove(true); }, gap - (now - lastMove)); return; }
-    lastMove = now; ch.send({ type: 'broadcast', event: 'mv', payload: { p: peer, m: pick(mine, MOVE_KEYS) } }).catch(() => {});
+    const m = pick(mine, MOVE_KEYS), k = JSON.stringify(m);
+    if (!force && k === lastMoveKey) return;
+    const now = performance.now(), gap = moveGap();
+    if (!force && now - lastMove < gap) { if (!moveTimer) moveTimer = setTimeout(() => { moveTimer = 0; sendMove(false); }, gap - (now - lastMove)); return; }
+    lastMove = now; lastMoveKey = k; send('mv', { m });
   };
-  const pick = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => keys.has(k)));
-  // back in the foreground (or online again): announce ourselves and our spot straight away
-  const reannounce = () => { if (!online) return; trackedKey = ''; sendSlow(); sendMove(true); };
+  // heartbeat: state + spot, so anyone who missed something (or just arrived) catches up; slower in a big room
+  let lastHb = performance.now();
+  setInterval(() => {
+    if (!online) return;
+    const n = count(), every = Math.min(15000, Math.max(4000, n * 1500));
+    if (performance.now() - lastHb < every) return;
+    lastHb = performance.now(); send('hb', { s: slowOf(), m: pick(mine, MOVE_KEYS) });
+  }, 1000);
+  // back in the foreground (or online again): announce ourselves straight away
+  const reannounce = () => { if (!online) return; lastTracked = ''; track(); sendState(true); sendMove(true); };
   document.addEventListener('visibilitychange', () => { if (!document.hidden) reannounce(); });
   addEventListener('online', reannounce);
-  // keepalive: re-send where we are every 2 s, so anyone who missed a movement message (or just joined) catches up
-  setInterval(() => { if (online && performance.now() - lastMove > 2000) sendMove(true); }, 1000);
-  addEventListener('pagehide', () => { try { ch.untrack(); sb.removeChannel(ch); } catch (_) {} });
+  addEventListener('pagehide', () => { try { send('bye', {}); ch.untrack(); sb.removeChannel(ch); } catch (_) {} });
+  if (typeof window !== 'undefined') window.__rtStats = () => { const s = (performance.now() - stats.t0) / 1000; return { sent: stats.sent, got: stats.got, perSec: +((stats.sent + stats.got) / s).toFixed(2), peers: count(), moveHz: +(1000 / moveGap()).toFixed(2) }; };
   return Object.freeze({
     async presence(patch) {
-      const before = JSON.stringify(slow);
       for (const [k, v] of Object.entries(patch)) { if (v === null) delete mine[k]; else mine[k] = v; }
-      slow = Object.fromEntries(Object.entries(mine).filter(([k]) => !MOVE_KEYS.has(k)));
-      if (JSON.stringify(slow) !== before) sendSlow();
+      track(); sendState(false);
       if (Object.keys(patch).some((k) => MOVE_KEYS.has(k))) sendMove(false);
       emit();
     },

@@ -52,6 +52,7 @@ export class Multiplayer {
     const p = {
       v: 1, n: str(s.name, 16), tag: str(s.tag, 10), lv: s.level | 0, skin: str(s.skin, 24), id: this.myId || null,
       x: r2(s.pos.x), y: r2(s.pos.y), z: r2(s.pos.z), h: r2(s.yaw), a: s.anim, sp: r2(s.speed),
+      vx: s.vel ? Math.round(s.vel.x * 10) / 10 : 0, vz: s.vel ? Math.round(s.vel.z * 10) / 10 : 0,   // lets the others glide between our (rate-limited) updates
       r: s.ride ? { x: r2(s.ride.x), y: r2(s.ride.y), z: r2(s.ride.z), h: r2(s.ride.h), p: r2(s.ride.p), o: r2(s.ride.o), sp: r2(s.ride.sp) } : null,
       say: this.lastSay || null,
       race: this.myRace || null,   // { id, game, plan, seed, at, host } while hosting / joined to a race or Tile Drop match
@@ -125,7 +126,9 @@ export class Multiplayer {
     if (!r) { r = { peer: peer.peer, by: peer.by, guest: peer.guest, isMe: peer.isMe, p: {}, pos: new THREE.Vector3(), yaw: 0, holder: {}, born: performance.now(), sayI: pr.say?.i ?? null }; this.remotes.set(peer.peer, r);   // sayI: never replay a line said before we arrived
       if (!peer.isMe) this.announce(str(pr.n, 16) || 'A player', true); }
     const prev = r.p; r.p = pr; r.by = peer.by;
-    r.target = new THREE.Vector3(num(pr.x, -400, 400), num(pr.y, -20, 300), num(pr.z, -400, 400));
+    const nt = new THREE.Vector3(num(pr.x, -400, 400), num(pr.y, -20, 300), num(pr.z, -400, 400));
+    if (!r.base || !r.base.equals(nt) || prev.vx !== pr.vx || prev.vz !== pr.vz) { r.base = nt; r.target = nt.clone(); r.tAt = performance.now(); }   // a fresh spot: extrapolate from here
+    r.vel = { x: num(pr.vx, -40, 40), z: num(pr.vz, -40, 40) };
     r.tyaw = num(pr.h, -50, 50);
     const skin = this.validSkin(pr.skin) ? pr.skin : 'goldenking';
     if (skin !== r.skin) this.setSkin(r, skin);
@@ -179,6 +182,8 @@ export class Multiplayer {
       const ride = r.p.r && typeof r.p.r === 'object' ? r.p.r : null;
       if (ride) { this.tickRide(r, ride, dt, k); continue; }
       if (r.board) r.board.visible = false;
+      // dead reckoning: keep moving along their last velocity for up to 1.5 s after an update
+      if (r.vel && performance.now() - (r.tAt || 0) < 1500) { r.target.x += r.vel.x * dt; r.target.z += r.vel.z * dt; }
       if (r.pos.distanceToSquared(r.target) > 15 * 15) r.pos.copy(r.target); else r.pos.lerp(r.target, k);
       let d = r.tyaw - r.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); r.yaw += d * k;
       r.c.root.position.copy(r.pos); r.c.root.rotation.set(0, r.yaw, 0);
