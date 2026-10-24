@@ -50,9 +50,9 @@ const store = {
 };
 const MOBILE = /Android|iPhone|iPad/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);   // iPadOS reports as a Mac
 // one-time reset (v2 render pipeline): tiers that were lowered automatically by older crash heuristics go back to default
-if (store.get('bagverse.pipeline') !== '2') { store.set('bagverse.q', null); store.set('bagverse.boot', null); store.set('bagverse.pipeline', '2'); }
-let quality = params.get('q') || (params.has('low') ? 'low' : null) || store.get('bagverse.q') || (MOBILE ? 'low' : 'high');
-if (!QUALITIES.includes(quality)) quality = 'high';
+if (store.get('bagverse.pipeline') !== '3') { store.set('bagverse.q', null); store.set('bagverse.boot', null); store.set('bagverse.pipeline', '3'); }   // v3: everyone back to the LOW default once
+let quality = params.get('q') || (params.has('low') ? 'low' : null) || store.get('bagverse.q') || 'low';   // LOW by default on every device; GFX button raises it
+if (!QUALITIES.includes(quality)) quality = 'low';
 let crashNote = null;
 if (store.get('bagverse.boot') && !params.has('q') && !FIXED_DT) {
   const lower = QUALITIES[Math.max(0, QUALITIES.indexOf(quality) - 1)];
@@ -615,7 +615,7 @@ function inventory() {
   if ($('ridebtn')) $('ridebtn').onclick = () => { hud.closeModal(); summonScooter('punk'); };
   $('rename').onclick = () => {
     const n = $('newname').value.trim();
-    if (n) { s.name = n.slice(0, 16).replace(/[^\w.-]/g, '_'); progress.save(); player.refreshPlate(profile()); hud.closeModal(); }
+    if (n) { s.name = n.slice(0, 16).replace(/[^\w.-]/g, '_'); s.nameSet = true; progress.save(); player.refreshPlate(profile()); hud.closeModal(); }
   };
 }
 
@@ -828,6 +828,9 @@ const skins = new SkinScreen({
   renderer, chars: CHARS, loadChar, allIds: CHAR_IDS, platform: propGltfs.platform,
   getEquipped: () => charId,
   getLevel: () => progress.s.level,
+  getName: () => progress.s.name,
+  needName: () => !progress.s.nameSet,
+  setName: (n) => { progress.s.name = n; progress.s.nameSet = true; progress.save(); player.refreshPlate(profile()); },
   onEquip: (id) => { if (id !== charId) { pickChar(id); hud.toast?.(`SKIN EQUIPPED · ${id.toUpperCase()}`); sfx.play('whoosh'); quests.emit('skin', 1, { id }); } },
   onClose: () => { $('hud').hidden = false; start(); },
 });

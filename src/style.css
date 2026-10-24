@@ -641,3 +641,18 @@ body.touch #rh-board { top: calc(var(--t) + var(--mm, 76px) + 64px); right: var(
 .lb-mini div { display: flex; justify-content: space-between; font-weight: 600; }
 .lb-mini div.me { color: #3dfff0; }
 @media (max-width: 600px) { .lb-row { grid-template-columns: 24px 1fr auto; } .lb-sub { display: none; } }
+
+/* ===== player name on the skin screen ===== */
+#skins .sk-player { display: flex; flex-direction: column; justify-content: center; gap: 2px; margin-right: 6px; }
+#skins .sk-player span { font-size: 11px; letter-spacing: 1.5px; color: #8fa3bb; font-weight: 700; }
+#skins .sk-player input { height: 40px; width: 210px; box-sizing: border-box; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(124,255,61,.55); background: rgba(6,10,16,.85);
+  color: #fff; font: 700 17px "Rajdhani", sans-serif; letter-spacing: .5px; outline: none; }
+#skins .sk-player input:focus { border-color: #7cff3d; box-shadow: 0 0 0 2px rgba(124,255,61,.25); }
+#skins .sk-player input::placeholder { color: #6f7f92; font-weight: 600; }
+#skins .sk-player input.bad { border-color: #ff4d6d; animation: skshake .35s; }
+@keyframes skshake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+@media (max-width: 760px) { #skins .sk-actions { flex-wrap: wrap; } #skins .sk-player { flex: 1 1 100%; margin: 0 0 4px; } #skins .sk-player input { width: 100%; } }
+body.touch #skins .sk-actions { flex-wrap: wrap; }
+body.touch #skins .sk-player { flex: 1 1 100%; margin: 0 0 2px; flex-direction: row; align-items: center; gap: 8px; }
+body.touch #skins .sk-player span { white-space: nowrap; }
+body.touch #skins .sk-player input { flex: 1; width: auto; height: 38px; font-size: 16px; }   /* 16px: no iOS zoom on focus */

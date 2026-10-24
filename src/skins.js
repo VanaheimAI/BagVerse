@@ -100,10 +100,11 @@ const radial = (stops) => canvasTex(256, 256, (g, w, h) => {
 export class SkinScreen {
   /**
    * chars: { id: gltf } · getEquipped(): id · onEquip(id) · onClose() · getLevel(): number
+   * getName(): current player name · needName(): true until the player has chosen one · setName(name)
    */
   /** chars: loaded gltfs by id (filled in as skins load) · loadChar(id): Promise<gltf> · allIds: every skin with a model */
-  constructor({ renderer, chars, loadChar, allIds, platform, getEquipped, onEquip, onClose, getLevel }) {
-    Object.assign(this, { renderer, chars, loadChar, allIds, getEquipped, onEquip, onClose, getLevel });
+  constructor({ renderer, chars, loadChar, allIds, platform, getEquipped, onEquip, onClose, getLevel, getName, needName, setName }) {
+    Object.assign(this, { renderer, chars, loadChar, allIds, getEquipped, onEquip, onClose, getLevel, getName, needName, setName });
     this.platformGltf = platform;
     this.isOpen = false;
     this.favs = new Set(store.get('bagverse.favs', []));
@@ -383,6 +384,7 @@ export class SkinScreen {
         </div>
       </section>
       <footer class="sk-actions">
+        <label class="sk-player"><span>PLAYER NAME</span><input id="sk-pname" maxlength="16" placeholder="Enter your name" autocomplete="nickname" spellcheck="false" enterkeyhint="go" /></label>
         <button class="sk-btn" id="sk-back">BACK</button><button class="sk-btn" id="sk-shop">SHOP</button><button class="sk-btn go" id="sk-equip">EQUIP SKIN</button>
       </footer>
       <div class="sk-toast" id="sk-toast"></div>`;
@@ -422,6 +424,8 @@ export class SkinScreen {
     this.dragging = () => !!drag;
     window.addEventListener('keydown', (e) => {
       if (!this.isOpen) return;
+      const typing = e.target && e.target.id === 'sk-pname';
+      if (typing && e.key !== 'Enter' && e.key !== 'Escape') return;   // letters and arrows belong to the name field
       if (e.key === 'Escape') { e.stopPropagation(); this.close(); }
       if (e.key === 'Enter') { e.preventDefault(); this.equip(); }
       if (/^Arrow(Left|Right|Up|Down)$/.test(e.key)) {
@@ -496,7 +500,25 @@ export class SkinScreen {
     if (this.filter === 'favorites') this.setFilter('favorites');
   }
 
+  /** the typed name, cleaned (letters, digits, _ . -; 2–16 chars), or null when it is not valid yet */
+  typedName() {
+    const v = (this.$('sk-pname').value || '').trim().replace(/\s+/g, '_').replace(/[^\w.-]/g, '').slice(0, 16);
+    return v.length >= 2 ? v : null;
+  }
+  /** keep the name: required the first time; later an empty field just keeps the old name */
+  commitName() {
+    const n = this.typedName();
+    if (n) { if (n !== this.getName?.()) this.setName?.(n); return true; }
+    if (this.needName?.()) {
+      this.toast('ENTER YOUR PLAYER NAME (2–16 LETTERS)');
+      const f = this.$('sk-pname'); f.classList.remove('bad'); void f.offsetWidth; f.classList.add('bad'); f.focus();
+      return false;
+    }
+    return true;
+  }
+
   equip() {
+    if (!this.commitName()) return;
     const s = this.skin(this.sel);
     if (!s || !s.owned) { this.toast(s?.lock ? s.lock.toUpperCase() : 'SKIN LOCKED'); return; }
     if (!this.chars[s.id]) { this.select(s.id); return; }   // still loading (or retry after a failed load)
@@ -515,6 +537,9 @@ export class SkinScreen {
     this._char = Object.fromEntries(Object.entries(charUniforms).map(([k, u]) => [k, u.value.clone ? u.value.clone() : u.value]));
     if (!Object.keys(this.thumbs).length) this.useThumbs({ ...THUMBS, ...ART });
     this.isOpen = true; this.el.hidden = false;
+    const f = this.$('sk-pname'); f.classList.remove('bad');
+    f.value = this.needName?.() ? '' : this.getName?.() || '';
+    if (this.needName?.()) setTimeout(() => { if (this.isOpen && !matchMedia('(pointer: coarse)').matches) f.focus(); }, 300);   // phones: no keyboard pop-up until they tap
     this.setFilter(this.filter);
     this.select(this.getEquipped());
     this.yaw = 0; this.yawV = 0; this.setZoom?.(1);
@@ -523,6 +548,7 @@ export class SkinScreen {
 
   close() {
     if (!this.isOpen) return;
+    if (!this.commitName()) return;   // first entry: a name is required before playing
     this.isOpen = false; this.el.hidden = true;
     for (const [k, v] of Object.entries(this._char || {})) { const u = charUniforms[k]; if (u.value.copy) u.value.copy(v); else u.value = v; }
     this.onClose?.();
