@@ -14,5 +14,7 @@ console.log('A alone:', await snapA());
 const B = await open('B');
 await B.evaluate(() => { window.__bagverse.progress.s.name = 'QA_Newcomer'; });
 console.log('B in. B sees:', await B.evaluate(() => [...window.__bagverse.mp.remotes.values()].map((r) => window.__bagverse.mp.displayName(r)).join(', ') || 'nobody'));
-for (let i = 0; i < 8; i++) { await new Promise((r) => setTimeout(r, 6000)); console.log('A:', await snapA()); }
+for (let i = 0; i < 4; i++) { await new Promise((r) => setTimeout(r, 6000)); console.log('A:', await snapA()); }
+console.log('A join notices:', await A.evaluate(() => [...document.querySelectorAll('#chatlog > *')].map((e) => e.textContent).filter((t) => /joined|Already here/.test(t)).join(' / ')));
+console.log('B arrival line:', await B.evaluate(() => [...document.querySelectorAll('#chatlog > *')].map((e) => e.textContent).filter((t) => /joined|Already here/.test(t)).join(' / ')));
 await b.close(); console.log('done');
