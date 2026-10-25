@@ -90,3 +90,10 @@ ok(s === 200 && j.from === T_ATA && j.to === PAYER_ATA && j.to_owner === PAYER &
 [s, j] = await call(adminApi, 'refund_done', { id: ad.id, signature: 'SIG1' }, { tok }, { sb, rpc: 'x', fetchFn: chain(120) }); ok(s === 202 && AD.status === 'pulled', 'a transaction that is not a refund to the payer is not accepted');
 [s, j] = await call(adminApi, 'refund_done', { id: ad.id, signature: 'REFUND1' }, { tok }, { sb, rpc: 'x', fetchFn: chain(120) }); ok(j.confirmed && AD.status === 'refunded' && AD.refund_signature === 'REFUND1', 'refund confirmed on-chain: booking refunded');
 [s, j] = await call(adminApi, 'refund_prepare', { id: ad.id }, { tok }, { sb, rpc: 'x', fetchFn: chain(120) }); ok(s === 409, 'cannot refund twice');
+// 3D models for the vault showcases
+const glb = Buffer.concat([Buffer.from('glTF'), Buffer.alloc(16)]).toString('base64');
+[s, j] = await call(adminApi, 'upload', { type: 'model/gltf-binary', data: glb }, { tok }, { sb }); ok(s === 200 && /\.glb$/.test(j.url), 'GLB upload returns a .glb URL');
+[s, j] = await call(adminApi, 'upload', { type: 'model/gltf-binary', data: Buffer.from('not a glb').toString('base64') }, { tok }, { sb }); ok(s === 400, 'a non-GLB file is refused: ' + j.error);
+[s, j] = await call(adminApi, 'save_raffle', { vault: 'kanto', prize: { name: 'Mega Charizard X', model: 'https://cdn.example/x.glb', slot: '2' }, draws_at: new Date(Date.now() + 86400e3).toISOString() }, { tok }, { sb });
+const K = sb.db.raffles.find((r) => r.id === j.id); ok(K.prize.model === 'https://cdn.example/x.glb' && K.prize.slot === 2, 'raffle keeps its 3D model and showcase spot');
+[s, j] = await call(adminApi, 'save_raffle', { vault: 'kanto', prize: { name: 'X', model: 'http://insecure/x.glb' }, draws_at: new Date(Date.now() + 86400e3).toISOString() }, { tok }, { sb }); ok(s === 400, 'model links must be https');

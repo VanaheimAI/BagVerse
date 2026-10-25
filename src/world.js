@@ -218,7 +218,20 @@ export class World {
     this.holos.sort((a, b) => a.name.localeCompare(b.name));
     // landmarks.js may replace the HOLO_* markers with vault showcases (positions, kinds, labels)
     const specs = this.holoSpecs || this.holos.map((h, i) => ({ pos: h.getWorldPosition(new THREE.Vector3()), kind: i % 3, label: names[i % 3] }));
+    this.showcases = {};   // zone -> [{ holder, pos, label }]: floating models swapped in by setShowcase()
     specs.forEach((sp, i) => {
+      if (sp.kind === 'pack') {   // a floating, turning model (booster pack placeholder or the raffle's own GLB); no beam
+        const holder = new THREE.Group(), pos = sp.pos.clone(); holder.position.copy(pos); this.scene.add(holder);
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.05, 40), new THREE.MeshBasicMaterial({ color: 0xff3b3b, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+        ring.rotation.x = -Math.PI / 2; ring.position.set(pos.x, pos.y - 2.3, pos.z); this.scene.add(ring);
+        const cv = labelTexture(sp.label), tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+        const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, toneMapped: false, depthWrite: false })); spr.scale.set(2.6, 0.8, 1); spr.position.set(pos.x, pos.y + 1.85, pos.z); this.scene.add(spr);
+        const L = { cv, tex, name: sp.label[0], raffle: true };
+        (this.holoLabels ||= []).push(L);
+        (this.showcases[sp.zone] ||= [])[sp.slot] = { holder, pos, label: L, zone: sp.zone, slot: sp.slot };
+        this.anim.push((t) => { holder.rotation.y = t * 0.7 + i * 2.1; holder.position.y = pos.y + Math.sin(t * 1.3 + i) * 0.14; ring.material.opacity = 0.4 + 0.2 * Math.sin(t * 2 + i); });
+        return;
+      }
       const item = sp.kind === 'slab' ? builders[1]() : sp.kind === 'mystery' ? mysterySlab(sp.theme) : builders[sp.kind]();
       item.scale.setScalar(1.4);
       const pos = sp.pos.clone(); const label = sp.label || cardLabel;
@@ -239,6 +252,22 @@ export class World {
       this.holoLabels.push({ cv, tex, name: label[0], raffle: !!this.holoSpecs });
     });
     this.nextLabel = 0;
+  }
+
+  /** put a model in a vault showcase: scaled to ~2.3 m tall, centred on the float point; label = { name, until (ms) | sub } */
+  setShowcase(zone, slot, object, label) {
+    const sc = this.showcases?.[zone]?.[slot]; if (!sc) return false;
+    if (object) {
+      sc.holder.clear();
+      const o = object; o.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(o), size = box.getSize(new THREE.Vector3()), k = 2.3 / Math.max(size.y, size.x, 0.01);
+      o.scale.multiplyScalar(k); o.updateMatrixWorld(true);
+      const c = new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()); o.position.sub(c);
+      o.traverse((m) => { if (m.isMesh) { m.castShadow = false; if (m.material) { m.material.side = THREE.DoubleSide; m.material.envMapIntensity = 1.2; } } });
+      sc.holder.add(o);
+    }
+    if (label) { sc.label.name = label.name; sc.label.until = label.until || 0; sc.label.sub = label.sub || null; this.nextLabel = 0; }
+    return true;
   }
 
   setupSmoke(anchors) {
@@ -302,7 +331,9 @@ export class World {
       for (const L of this.holoLabels) {
         const g = L.cv.getContext('2d');
         g.clearRect(0, 0, 512, 160);
-        const fresh = labelTexture([L.name, `${L.raffle ? 'RAFFLE' : 'TOURNAMENT'} IN ${cd}`]);
+        const left = L.until ? L.until - Date.now() : 0;
+        const sub = L.sub || (L.until ? (left > 0 ? `DRAW IN ${left > 86400e3 ? Math.floor(left / 86400e3) + 'D ' + Math.floor(left % 86400e3 / 3600e3) + 'H' : Math.floor(left / 3600e3) + 'H ' + Math.floor(left % 3600e3 / 60e3) + 'M ' + Math.floor(left % 60e3 / 1000) + 'S'}` : 'DRAWING NOW') : `${L.raffle ? 'RAFFLE' : 'TOURNAMENT'} IN ${cd}`);
+        const fresh = labelTexture([L.name, sub]);
         g.drawImage(fresh, 0, 0); L.tex.needsUpdate = true;
       }
     }

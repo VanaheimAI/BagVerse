@@ -953,9 +953,31 @@ raffles.onChange(async () => {
   if (!raffles.polygon) hud.chat('SYSTEM', 'BagVerse', `You won ${won[0].prize?.name || 'a Courtyard slab'}! Link a Polygon wallet to receive it: open your Collection (I) → Loot.`, '#ffc83d');
 });
 raffles.start();
-function openVault(zid, label) {
+// Kanto Vault showcases: three floating booster packs out front, one per open raffle. A raffle's own 3D model
+// (prize.model, a GLB uploaded in /admin) replaces the placeholder pack in its slot.
+const PACKS = ['destined_rivals', 'journey_together', 'mega_evolution'].map((n) => `assets/packs/${n}.glb`);
+const showcaseKey = [], showcaseRaffle = { apex_arena: [] }, glbCache = new Map();
+const loadGlb = (url) => { if (!glbCache.has(url)) glbCache.set(url, lazyLoader.loadAsync(url).catch((e) => { glbCache.delete(url); throw e; })); return glbCache.get(url); };
+function syncShowcases() {
+  if (!world.showcases?.apex_arena) return;
+  const open = raffles.openFor('kanto'), slots = [null, null, null];
+  for (const r of open) { const want = (r.prize?.slot | 0) - 1; if (want >= 0 && want < 3 && !slots[want]) slots[want] = r; }
+  for (const r of open) if (!slots.includes(r)) { const i = slots.indexOf(null); if (i >= 0) slots[i] = r; }
+  slots.forEach((r, i) => {
+    showcaseRaffle.apex_arena[i] = r;
+    const model = /^https:\/\//.test(r?.prize?.model || '') ? r.prize.model : PACKS[i];
+    const label = r ? { name: String(r.prize?.name || 'POKÉMON RAFFLE').toUpperCase().slice(0, 20), until: Date.parse(r.draws_at) } : { name: 'POKÉMON RAFFLE', sub: 'NEXT PACK SOON' };
+    world.setShowcase('apex_arena', i, null, label);
+    if (showcaseKey[i] === model) return;
+    showcaseKey[i] = model;
+    loadGlb(model).then((g) => { if (showcaseKey[i] === model) world.setShowcase('apex_arena', i, g.scene.clone(true)); })
+      .catch(() => { if (model !== PACKS[i]) { showcaseKey[i] = PACKS[i]; loadGlb(PACKS[i]).then((g) => world.setShowcase('apex_arena', i, g.scene.clone(true))); } });   // a broken upload falls back to the pack
+  });
+}
+raffles.onChange(syncShowcases); syncShowcases();
+function openVault(zid, label, raffleId = null) {
   const L = progress.s.level, onepiece = zid === 'rwa_vault', vault = onepiece ? 'wano' : 'kanto';
-  const r = raffles.current(vault), last = raffles.last(vault);
+  const list = raffles.openFor(vault), r = list.find((x) => x.id === raffleId) || list[0] || null, last = raffles.last(vault);
   const need = r ? r.min_level | 0 : onepiece ? 25 : 100, lvOk = L >= need || Progress.unlockAll;
   const pz = r?.prize || {}, local = RWA_ASSETS.find((x) => x.mint && x.mint === pz.mint);
   const img = local?.photo || pz.image || null;
@@ -984,8 +1006,9 @@ function openVault(zid, label) {
   const lastHtml = last ? `<div class="rf-last"><small>LAST DRAW · ${escR(last.prize?.name || '')}</small>
       <div class="row"><span>Winner</span><b>${last.winner_name ? `${escR(last.winner_name)} · ${escR(shortAddr(last.winner_address))}` : 'No entries'}</b></div>
       ${last.proof?.blockhash ? `<div class="row"><span>Drawn from</span><b><a href="https://solscan.io/block/${last.proof.slot | 0}" target="_blank" rel="noopener">Solana block #${(last.proof.slot | 0).toLocaleString()} ↗</a></b></div>` : ''}</div>` : '';
-  hud.modal(`${label} · ${onepiece ? 'ONE PIECE' : 'POKÉMON'} RAFFLE`, `
-    ${prizeHtml}
+  const tabs = list.length > 1 ? `<div class="rf-tabs">${list.map((x) => `<button class="${x === r ? '' : 'ghost'}" data-rf="${escR(x.id)}">${escR(x.prize?.name || 'Raffle')}</button>`).join('')}</div>` : '';
+  hud.modal(`${label} · ${onepiece ? 'ONE PIECE' : 'POKÉMON'} RAFFLE${list.length > 1 ? 'S' : ''}`, `
+    ${tabs}${prizeHtml}
     ${r ? `<div class="row"><span>Draw</span><b id="rf-count">${countdown(Date.parse(r.draws_at) - Date.now())}</b></div>
     <div class="row"><span>Entries</span><b>${r.entries | 0}</b></div>
     <div class="row"><span>Entry</span><b style="color:${lvOk ? '#7cff3d' : '#ff6b6b'}">FREE · one per verified wallet · LV ${need}+</b></div>
@@ -995,9 +1018,10 @@ function openVault(zid, label) {
   const cd = $('rf-count');
   if (cd && r) { const iv = setInterval(() => { if (!document.body.contains(cd)) return clearInterval(iv); cd.textContent = countdown(Date.parse(r.draws_at) - Date.now()); }, 1000); }
   if ($('rf-wallet')) $('rf-wallet').onclick = () => openWallet();
+  document.querySelectorAll('[data-rf]').forEach((b) => (b.onclick = () => openVault(zid, label, b.dataset.rf)));
   if ($('rf-enter')) $('rf-enter').onclick = async () => {
     const b = $('rf-enter'); b.disabled = true; b.textContent = 'ENTERING…';
-    try { await raffles.enter(r.id, progress.s.name); sfx.play('success'); hud.toast(`RAFFLE ENTERED · ${(pz.name || 'GRADED CARD').toUpperCase()}`); openVault(zid, label); }
+    try { await raffles.enter(r.id, progress.s.name); sfx.play('success'); hud.toast(`RAFFLE ENTERED · ${(pz.name || 'GRADED CARD').toUpperCase()}`); openVault(zid, label, r.id); }
     catch (e) { b.disabled = false; b.textContent = 'ENTER FREE'; const er = $('rf-err'); if (er) { er.textContent = e.message; er.hidden = false; } }
   };
 }
@@ -1082,12 +1106,21 @@ function interactions(dt) {
     }
   }
   // vaults: Wano (graded One Piece raffles) and Kanto (graded Pokemon raffles); prompt at each door
+  // a floating pack at the Kanto Vault: its own raffle
+  for (const sc of (!promptHtml && world.showcases?.apex_arena) || []) {
+    if (!sc || Math.hypot(p.x - sc.pos.x, p.z - sc.pos.z) > 2.8 || Math.abs(p.y - (sc.pos.y - 2.45)) > 3) continue;
+    const r = showcaseRaffle.apex_arena[sc.slot], vz = world.zones.find((z) => z.id === 'apex_arena');
+    promptHtml = r ? `<kbd>E</kbd> RAFFLE · ${escR(String(r.prize?.name || 'POKÉMON').toUpperCase())}` : '<kbd>E</kbd> KANTO VAULT · NEXT PACK SOON';
+    action = () => openVault('apex_arena', vz?.label || 'KANTO VAULT', r?.id);
+    break;
+  }
   for (const zid of ['rwa_vault', 'apex_arena']) {
     if (promptHtml) break;
     const vz = world.zones.find((z) => z.id === zid); if (!vz) continue;
     const f = vaultFront(zid) || vz.pos;
     if (Math.hypot(p.x - f.x, p.z - f.z) > 7 || Math.abs(p.y - f.y) > 4) continue;
-    promptHtml = `<kbd>E</kbd> ${vz.label} · THIS WEEK'S RAFFLE`;
+    const nOpen = raffles.openFor(zid === 'rwa_vault' ? 'wano' : 'kanto').length;
+    promptHtml = `<kbd>E</kbd> ${vz.label} · ${nOpen > 1 ? `${nOpen} RAFFLES` : "THIS WEEK'S RAFFLE"}`;
     action = () => { quests.emit('rwa_view', 1, { id: zid === 'rwa_vault' ? 'vault' : 'kanto' }); openVault(zid, vz.label); };
   }
   if (!promptHtml && !input.touch && $('hud').classList.contains('can-mob')) promptHtml = flashmob.offer ? `<kbd>F</kbd> JOIN ${flashmob.offer.name.replace(/[<>&"]/g, '').toUpperCase()}'S FLASHMOB` : '<kbd>F</kbd> START A FLASHMOB';

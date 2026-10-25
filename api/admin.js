@@ -25,7 +25,7 @@ import drawHandler from './raffle/draw.js';
 import { TREASURY, USDC_MINT } from '../src/treasury.js';
 
 const clean = (v, n = 200) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
-const PRIZE_KEYS = ['name', 'set', 'grader', 'grade', 'variant', 'cert', 'mint', 'url', 'image', 'chain', 'issuer', 'contract', 'token_id'];
+const PRIZE_KEYS = ['name', 'set', 'grader', 'grade', 'variant', 'cert', 'mint', 'url', 'image', 'chain', 'issuer', 'contract', 'token_id', 'model', 'slot'];
 
 export default async function handler(req, res, deps = {}) {
   const url = new URL(req.url || '/', 'http://x'), body = req.method === 'POST' ? await readBody(req) : {};
@@ -51,7 +51,8 @@ export default async function handler(req, res, deps = {}) {
         if (!isFinite(when)) return send(res, 400, { error: 'Pick a draw date and time.' });
         const prize = Object.fromEntries(PRIZE_KEYS.map((k) => [k, clean(body.prize?.[k], k === 'image' || k === 'url' ? 600 : 160)]).filter(([, v]) => v));
         if (!prize.name) return send(res, 400, { error: 'The prize needs a name.' });
-        for (const k of ['url', 'image']) if (prize[k] && !/^https:\/\//.test(prize[k])) return send(res, 400, { error: `The ${k === 'url' ? 'card link' : 'image'} must start with https://` });
+        if (prize.slot) { const n = prize.slot | 0; if (n >= 1 && n <= 3) prize.slot = n; else delete prize.slot; }   // which floating showcase (1–3) at the vault
+        for (const k of ['url', 'image', 'model']) if (prize[k] && !/^https:\/\//.test(prize[k])) return send(res, 400, { error: `The ${k === 'url' ? 'card link' : 'image'} must start with https://` });
         if (prize.chain === 'polygon') {   // Courtyard slab on Polygon: contract + token id instead of a Solana mint
           prize.issuer = prize.issuer || 'courtyard'; delete prize.mint;
           if (prize.contract && !/^0x[0-9a-fA-F]{40}$/.test(prize.contract)) return send(res, 400, { error: 'Polygon contract must be a 0x… address.' });
@@ -115,11 +116,14 @@ export default async function handler(req, res, deps = {}) {
         for (const r of rs) if (r.winner_user) get(r.winner_user).wins++;
         return send(res, 200, { players: [...P.values()].sort((a, b) => Date.parse(b.lastSeen || 0) - Date.parse(a.lastSeen || 0)) });
       }
-      case 'upload': {
-        const type = /^image\/(png|jpeg|webp|gif)$/.test(body.type) ? body.type : null; if (!type) return send(res, 400, { error: 'PNG, JPEG, WebP or GIF only.' });
-        const buf = Buffer.from(String(body.data || ''), 'base64'); if (!buf.length || buf.length > 3.5e6) return send(res, 400, { error: 'Image must be under 3.5 MB.' });
+      case 'upload': {   // prize images (PNG / JPEG / WebP / GIF) and 3D models (GLB) for the vault showcases
+        const glb = body.type === 'model/gltf-binary';
+        const type = glb || /^image\/(png|jpeg|webp|gif)$/.test(body.type) ? body.type : null; if (!type) return send(res, 400, { error: 'PNG, JPEG, WebP, GIF or GLB only.' });
+        const buf = Buffer.from(String(body.data || ''), 'base64');
+        if (!buf.length || buf.length > (glb ? 3e6 : 3.5e6)) return send(res, 400, { error: glb ? 'The GLB must be under 3 MB (compress it, e.g. gltf-transform optimize).' : 'Image must be under 3.5 MB.' });
+        if (glb && buf.subarray(0, 4).toString('latin1') !== 'glTF') return send(res, 400, { error: 'That is not a binary glTF (.glb) file.' });
         const st = sb.storage; const { data: b } = await st.getBucket('prizes'); if (!b) await st.createBucket('prizes', { public: true });
-        const path = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}.${type.split('/')[1].replace('jpeg', 'jpg')}`;
+        const path = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}.${glb ? 'glb' : type.split('/')[1].replace('jpeg', 'jpg')}`;
         const { error } = await st.from('prizes').upload(path, buf, { contentType: type, cacheControl: '31536000' }); if (error) throw new Error(error.message);
         return send(res, 200, { url: st.from('prizes').getPublicUrl(path).data.publicUrl });
       }

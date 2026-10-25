@@ -705,3 +705,11 @@ Added next to the Solana setup without changing it (Solana sign-in, holder skins
 - **Holder skins from Courtyard:** a gate `{ skin, chain: 'polygon', contract }` in `src/nft-gates.js` is checked on the linked Polygon wallet through Alchemy's NFT API (`ALCHEMY_API_KEY`).
 - SQL: the "linked wallets on other chains" block at the end of `supabase/schema.sql`.
 - Tests: `node tools/api_evm_test.mjs` (linking rules with real Ethereum signatures, Polygon prizes, gates, admin views), `tools/polygon_win_test.mjs` (winner flow in a browser with an EIP-6963 test wallet).
+
+## Kanto Vault booster-pack showcases + 3D models per raffle (Oct 25)
+- The Kanto Vault's three showcases are **floating, turning models** (no pedestals, no beams; a red ground ring under each): placeholder booster packs `public/assets/packs/{destined_rivals,journey_together,mega_evolution}.glb` (user models; WebP textures + meshopt, ~110 KB each), scaled to ~2.3 m.
+- Each showcase belongs to one **open Kanto raffle** (`raffles.openFor('kanto')`: up to 3, ordered by `prize.slot` 1–3, then draw time). Its label shows the prize name and a live "DRAW IN …" countdown; with no raffle it reads NEXT PACK SOON. If the raffle has a 3D model (`prize.model`), that GLB replaces the placeholder pack (a broken file falls back to the pack). `World.setShowcase(zone, slot, object, label)`; `syncShowcases()` in `main.js` re-runs whenever raffles refresh.
+- **E next to a pack** opens that raffle; E at the door opens the vault with **tabs for every open raffle** (both vaults support up to 3 at once now).
+- **Admin:** each raffle has **3D MODEL (GLB)** (upload: checked to be a real `.glb`, max 3 MB, stored in the `prizes` bucket; or paste an https link) and **SHOWCASE SPOT** (Auto / 1 left / 2 middle / 3 right). The list marks raffles with 3D / SPOT badges.
+- Wano keeps its pedestal holograms for now; its raffles can carry a model too, but only Kanto shows them so far.
+- Test: `tools/kanto_packs_test.mjs`; admin upload/validation in `tools/api_admin_test.mjs`.

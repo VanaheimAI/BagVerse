@@ -41,6 +41,7 @@ export const VAULTS = {
       { type: 'box', c: [KANTO_GATE.x, KANTO_GATE.y], n: [KANTO_N.x, KANTO_N.y], halfW: 14.5, halfD: 2.4, y1: 17, floorY: 0.35 },   // old arena gate
     ],
     holos: { dist: 9.7, spread: 6, y: 0.7 },                         // just past the base slab
+    packs: true,                                                     // showcases: floating booster-pack models (no pedestals), one per raffle
   },
 };
 
@@ -127,6 +128,7 @@ export function prepareVaults(world, models) {
     if (!V.holos) continue;
     const spots = holoSpots(V), { n } = frame(V);
     spots.forEach((p, i) => {
+      if (V.packs) { world.holoSpecs.push({ pos: p.clone().setY(V.ground + 2.45), facing: Math.atan2(n.x, n.z), kind: 'pack', slot: i, theme: V.theme, label: ['POKÉMON RAFFLE', 'GRADED CARD · TBA'], zone: zid }); return; }
       const featured = V.theme === 'onepiece' && i === 1;
       world.holoSpecs.push({ pos: p.clone().setY(V.ground + PED.h + V.holos.y), facing: Math.atan2(n.x, n.z), kind: featured ? 'slab' : 'mystery', theme: V.theme,
         label: featured ? null : V.theme === 'onepiece' ? ['ONE PIECE RAFFLE', 'GRADED CARD · TBA'] : ['POKÉMON RAFFLE', 'GRADED CARD · TBA'], zone: zid });
@@ -147,7 +149,7 @@ export function prepareVaults(world, models) {
     };
     for (const [, V] of active) {
       const src = modelSource(models[V.model]); if (src) addGeo(src.geo, modelMatrix(V));
-      if (!V.holos) continue;
+      if (!V.holos || V.packs) continue;
       const ped = new THREE.CylinderGeometry(PED.r, PED.r, PED.h, 12).translate(0, PED.h / 2, 0);
       for (const p of holoSpots(V)) addGeo(ped, new THREE.Matrix4().makeTranslation(p.x, V.ground, p.z));
     }
@@ -189,6 +191,7 @@ export function placeVaults(scene, world, models, { shadows = true } = {}) {
     modelMatrix(V).decompose(m.position, m.quaternion, m.scale);
     m.castShadow = shadows; m.receiveShadow = true; scene.add(m);
     if (!V.holos) continue;
+    if (V.packs) { const { n, door } = frame(V), L = new THREE.PointLight(V.color, 14, 16, 2); L.position.copy(door).addScaledVector(n, 2).setY(V.ground + 4); scene.add(L); continue; }   // no pedestals: the packs float
     const rim = new THREE.MeshStandardMaterial({ color: V.color, emissive: V.color, emissiveIntensity: 0.8, roughness: 0.3, metalness: 0.6 });
     for (const p of holoSpots(V)) {
       const ped = new THREE.Mesh(new THREE.CylinderGeometry(PED.r, PED.r * 1.15, PED.h, 24), pedMat); ped.position.set(p.x, V.ground + PED.h / 2, p.z);

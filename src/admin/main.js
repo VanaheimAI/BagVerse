@@ -100,7 +100,7 @@ function listRaffles() {
   el.innerHTML = cache.raffles.map((r) => { const p = r.prize || {};
     return `<div class="rf">${p.image ? `<img src="${esc(p.image)}" alt="">` : '<div class="ph">?</div>'}
       <div><div><span class="vt ${r.vault}">${r.vault.toUpperCase()}</span> <span class="st ${r.status}">${r.status.toUpperCase()}</span>${p.chain === 'polygon' ? ' <span class="st paid">COURTYARD · POLYGON</span>' : p.mint ? ' <span class="st ended">COLLECTOR CRYPT · SOLANA</span>' : ''}</div>
-        <div class="t">${esc(p.name)}${p.grade ? ` · ${esc(p.grader || '')} ${esc(p.grade)}` : ''}</div>
+        <div class="t">${esc(p.name)}${p.grade ? ` · ${esc(p.grader || '')} ${esc(p.grade)}` : ''}${p.model ? ' <span class="st paid">3D</span>' : ''}${p.slot ? ` <span class="st ended">SPOT ${p.slot}</span>` : ''}</div>
         <div class="m">Draw ${fmt(r.draws_at)} <span class="mono">(${utc(r.draws_at)})</span> · ${r.entries | 0} entries · LV ${r.min_level}+</div>
         ${r.winner_name ? `<div class="m">Winner: <b style="color:var(--gold)">${esc(r.winner_name)}</b> · <span class="mono">${short(r.winner_address)}</span> · ${esc(r.proof?.method || '')}</div>` : ''}</div>
       <div class="acts">${r.status === 'open' ? `<button class="btn sm" data-edit="${r.id}">EDIT</button>` : ''}<button class="btn sm" data-ent="${r.id}">ENTRIES</button>
@@ -131,6 +131,9 @@ function form() {
     <label class="f"><span>CARD LINK</span><input id="fu" placeholder="https://collectorcrypt.com/… or https://courtyard.io/…"></label>
     <label class="f"><span>IMAGE</span><div class="split"><input id="fi" placeholder="https://… or upload" style="flex:1"><label class="btn sm" style="margin:0">UPLOAD<input id="ff" type="file" accept="image/*" hidden></label></div>
       <div class="preview" id="fp"></div></label>
+    <div class="row2"><label class="f"><span>3D MODEL (GLB) · SHOWN FLOATING AT THE VAULT</span><div class="split"><input id="fglb" placeholder="https://….glb or upload" style="flex:1"><label class="btn sm" style="margin:0">UPLOAD GLB<input id="fgf" type="file" accept=".glb,model/gltf-binary" hidden></label></div>
+        <span class="hint" id="fglbh">Empty = a placeholder booster pack.</span></label>
+      <label class="f"><span>SHOWCASE SPOT</span><select id="fslot"><option value="">Auto</option><option value="1">1 · left</option><option value="2">2 · middle</option><option value="3">3 · right</option></select></label></div>
     <label class="f"><span>DRAW TIME (YOUR LOCAL TIME)</span><input id="fd" type="datetime-local"><span class="hint" id="fdu"></span></label>
     <div class="split" style="margin-top:12px"><button class="btn go" id="fsave">${r ? 'SAVE CHANGES' : 'CREATE RAFFLE'}</button>${r ? '<button class="btn" id="fclear">NEW INSTEAD</button>' : ''}<span id="fmsg"></span></div>`;
   $('#fv').value = r?.vault || 'wano'; $('#fl').value = r ? r.min_level : 25; $('#fn').value = p.name || ''; $('#fs').value = p.set || ''; $('#fg').value = p.grader ?? 'PSA';
@@ -139,6 +142,17 @@ function form() {
   const chainUi = () => { const c = $('#fch').value; $('#fsol').hidden = c === 'polygon'; $('#fpoly').hidden = c !== 'polygon'; $('#fm').closest('label').hidden = c !== 'solana'; };
   $('#fch').onchange = chainUi; chainUi();
   $('#fd').value = toLocalInput(r ? new Date(r.draws_at) : nextSunday20());
+  $('#fglb').value = p.model || ''; $('#fslot').value = p.slot ? String(p.slot) : '';
+  const glbHint = () => { const u = $('#fglb').value.trim(); $('#fglbh').innerHTML = /^https:\/\/.+/.test(u) ? `3D model set · <a href="${esc(u)}" target="_blank" rel="noopener">download</a>` : 'Empty = a placeholder booster pack.'; };
+  $('#fglb').oninput = glbHint; glbHint();
+  $('#fgf').onchange = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    if (file.size > 3e6) { $('#fmsg').innerHTML = '<span class="err">The GLB must be under 3 MB.</span>'; return; }
+    $('#fmsg').innerHTML = '<span class="hint">Uploading model…</span>';
+    try { const data = await new Promise((ok, bad) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.onerror = () => bad(new Error('Could not read the file.')); fr.readAsDataURL(file); });
+      const j = await api('upload', { name: file.name, type: 'model/gltf-binary', data }); $('#fglb').value = j.url; glbHint(); $('#fmsg').innerHTML = '<span class="ok">3D model uploaded</span>'; }
+    catch (err) { $('#fmsg').innerHTML = `<span class="err">${esc(err.message)}</span>`; }
+  };
   const showUtc = () => { const d = new Date($('#fd').value); $('#fdu').textContent = isFinite(d) ? `= ${d.toUTCString().slice(0, 22)} UTC · players see a countdown` : ''; };
   const showImg = () => { const u = $('#fi').value.trim(); $('#fp').innerHTML = /^https:\/\//.test(u) ? `<img src="${esc(u)}" alt=""><span class="hint">Preview</span>` : ''; };
   $('#fd').oninput = showUtc; $('#fi').oninput = showImg; showUtc(); showImg();
@@ -152,7 +166,7 @@ function form() {
   };
   $('#fsave').onclick = async () => {
     const body = { id: r?.id, vault: $('#fv').value, min_level: +$('#fl').value || 0, draws_at: new Date($('#fd').value).toISOString(),
-      prize: { name: $('#fn').value, set: $('#fs').value, grader: $('#fg').value, grade: $('#fgr').value, variant: $('#fva').value, url: $('#fu').value.trim(), image: $('#fi').value.trim(),
+      prize: { name: $('#fn').value, set: $('#fs').value, grader: $('#fg').value, grade: $('#fgr').value, variant: $('#fva').value, url: $('#fu').value.trim(), image: $('#fi').value.trim(), model: $('#fglb').value.trim(), slot: $('#fslot').value,
         ...($('#fch').value === 'polygon' ? { chain: 'polygon', issuer: 'courtyard', cert: $('#fc2').value, contract: $('#fct').value.trim(), token_id: $('#ft').value.trim() }
           : { chain: 'solana', cert: $('#fc').value, mint: $('#fch').value === 'solana' ? $('#fm').value.trim() : '', ...($('#fch').value === 'solana' && $('#fm').value.trim() ? { issuer: 'collector_crypt' } : {}) }) } };
     try { $('#fsave').disabled = true; await api('save_raffle', body); toast(r ? 'Raffle saved' : 'Raffle created'); editing = null; showRaffles(); overview(); }

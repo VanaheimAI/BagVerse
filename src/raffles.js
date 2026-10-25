@@ -41,6 +41,11 @@ export class Raffles {
 
   /** the open raffle for a vault ('wano' | 'kanto'): the one drawing soonest */
   current(vault) { return this.list.filter((r) => r.vault === vault && r.status === 'open').sort((a, b) => Date.parse(a.draws_at) - Date.parse(b.draws_at))[0] || null; }
+  /** every open raffle for a vault, in showcase order (prize.slot 1–3 first, then by draw time); max 3 */
+  openFor(vault) {
+    return this.list.filter((r) => r.vault === vault && r.status === 'open')
+      .sort((a, b) => ((a.prize?.slot | 0) || 9) - ((b.prize?.slot | 0) || 9) || Date.parse(a.draws_at) - Date.parse(b.draws_at)).slice(0, 3);
+  }
   /** the latest finished raffle for a vault */
   last(vault) { return this.list.filter((r) => r.vault === vault && r.status === 'drawn').sort((a, b) => Date.parse(b.draws_at) - Date.parse(a.draws_at))[0] || null; }
   entered(id) { return this.mine.has(id); }
