@@ -273,6 +273,7 @@ const grass = params.has('nograss') ? null : new Grass(scene, {
 const setLook = (name) => {
   lookName = name; look.apply(name);
   nightLights.setLevel(PRESETS[name].lamps || 0);
+  world.setPackGlow?.(PRESETS[name].lamps || 0);   // vault showcases light up as the sky darkens
   try { look.captureGI(); if (look.giReady) look.apply(name); } catch (e) { console.warn('GI capture failed', e); }
   if (grass) { const P = PRESETS[name]; grass.setLight(new THREE.Color(P.sun), P.sunI, new THREE.Color(P.hemiSky), P.hemiI); }
   try { localStorage.setItem('bagverse.look', name); } catch (_) {}
