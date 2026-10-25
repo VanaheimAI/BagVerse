@@ -730,6 +730,18 @@ body.touch #hud.menu-open #walletbtn { display: block; }
 #skins .sk-stats b { font-size: 15px; color: #fff; }
 #skins.collection .sk-rotate span::after { content: ""; }
 body.touch #skins .sk-use, body.touch #skins .sk-stats { display: none; }
+/* live raffles tab: view only, players enter at the vault */
+#skins .raffle-card .art.slab { position: relative; }
+#skins .raffle-card .rf-v, #skins .raffle-card .rf-in { position: absolute; left: 6px; font-style: normal; font: 800 9px "Rajdhani", sans-serif; letter-spacing: 1px; padding: 2px 6px; border-radius: 4px; }
+#skins .raffle-card .rf-v { bottom: 6px; background: var(--rc); color: #10131a; }
+#skins .raffle-card .rf-in { bottom: 6px; left: auto; right: 6px; background: rgba(10,14,20,.85); color: #7cff3d; border: 1px solid #7cff3d; }
+#skins .raffle-card .rf-cd { font-variant-numeric: tabular-nums; }
+#skins #sk-filters .rf-n { font-style: normal; margin-left: 5px; padding: 0 5px; border-radius: 8px; background: #ff3b3b; color: #fff; font-size: .8em; }
+#skins #sk-filters .rf-n:empty { display: none; }
+#skins.collection .sk-filters { grid-template-columns: repeat(5, 1fr); }
+#skins.collection .sk-filters button { font-size: 14px; letter-spacing: .5px; white-space: nowrap; }
+body.touch #skins.collection .sk-filters button { font-size: 11.5px; letter-spacing: .3px; }
+#skins .raffle-card.in .rf-v { bottom: 26px; }
 body.touch #skins.collection .slab-card { width: calc(var(--cw) * .85); }
 @supports (width: 1cqh) { body.touch #skins.collection .slab-card { width: calc((100cqh - 46px) * .62); } }
 

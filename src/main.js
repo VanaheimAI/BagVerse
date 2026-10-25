@@ -1160,9 +1160,11 @@ const skins = new SkinScreen({
   transition: (fn) => fx.through(fn, 220, 450),
   getLoot: () => collectionLoot(),
   getGear: () => collectionGear(),
+  getRaffles: () => collectionRaffles(),
   getStats: () => { const s = progress.s, rw = raffles.list.filter((r) => r.winner_user && r.winner_user === raffles.uid).length;
     return [['LEVEL', s.level], ['PLAYTIME', `${s.playMin | 0}m`], ['RAFFLE WINS', rw], ['TILE WINS', tileDrop.S.wins]]; },
   onUse: (it) => {
+    if (it.kind === 'raffle') { skins.close(); setTimeout(() => goToVault(it.vault), 500); return; }
     if (it.needsPolygon) { skins.close(); setTimeout(() => openPolygonLink((addr) => { raffles.polygon = { address: addr }; }), 700); return; }
     if (it.kind === 'gear' && it.id === 'gear:punk') { skins.close(); setTimeout(() => summonScooter('punk'), 700); return; }
     if (it.url) { window.open(it.url, '_blank', 'noopener'); return; }
@@ -1190,6 +1192,28 @@ function collectionLoot() {   // graded cards this player won in vault raffles
       desc: `Won in the ${V} Vault raffle (${new Date(r.draws_at).toUTCString().slice(5, 16)}). The team sends it to your verified wallet.` });
   }
   return out;
+}
+// live raffles for the Collection's RAFFLES tab: look only; entering happens at the vault itself
+function collectionRaffles() {
+  return ['kanto', 'wano'].flatMap((v) => raffles.openFor(v)).sort((a, b) => Date.parse(a.draws_at) - Date.parse(b.draws_at)).map((r) => {
+    const pz = r.prize || {}, local = RWA_ASSETS.find((a) => a.mint && a.mint === pz.mint), V = r.vault === 'wano' ? 'Wano' : 'Kanto', inn = raffles.entered(r.id);
+    const lvl = r.min_level | 0, place = r.vault === 'wano' ? 'east of the plaza' : 'in Bull Run';
+    return { id: 'raffle:' + r.id, raffleId: r.id, vault: r.vault, name: pz.name || 'Graded card', sub: pz.set || (r.vault === 'wano' ? 'Graded One Piece card' : 'Graded Pokémon card'),
+      cert: pz.cert ? `${pz.grader || ''} #${pz.cert}` : '', grade: { co: pz.grader || 'BVG', n: pz.grade || '?', word: pz.grade === '10' ? 'GEM MINT' : 'GRADED' },
+      img: local?.photo || (/^https:\/\//.test(pz.image || '') ? pz.image : cardArt(r.vault)), slabPhoto: !!local?.photo, until: Date.parse(r.draws_at), entered: inn, entries: r.entries | 0,
+      desc: `${inn ? "You're in this draw. " : ''}${r.entries | 0} ${r.entries === 1 ? 'entry' : 'entries'} so far${lvl ? ` · level ${lvl}+` : ''}. ${inn ? 'Good luck!' : `Free with a verified wallet: enter at the ${V} Vault (${place})${r.vault === 'kanto' ? ' at its door or its floating pack' : ''}.`}` };
+  });
+}
+/** travel to a vault's door, facing it (from the Collection's RAFFLES tab) */
+function goToVault(vault) {
+  const zid = vault === 'wano' ? 'rwa_vault' : 'apex_arena', vz = world.zones.find((z) => z.id === zid); if (!vz) return;
+  const f = vaultFront(zid) || vz.pos.clone(); let dx = f.x - vz.pos.x, dz = f.z - vz.pos.z; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+  if (veh) dismount();
+  fx.through(() => {
+    const p = f.clone(); p.x += dx * 4; p.z += dz * 4; p.y = world.physics.groundAt(p.x, p.z, p.y + 20) + 0.1;
+    player.teleport(p); const face = Math.atan2(-dx, -dz); player.facing = face; player.root.rotation.y = face; cam.yaw = face + Math.PI;
+    hud.toast(`${vz.label} · PRESS E AT THE DOOR TO ENTER`);
+  }, 200, 450);
 }
 function gearArt(kind) {   // card art for gear that has no model yet
   const c = document.createElement('canvas'); c.width = 300; c.height = 350; const g = c.getContext('2d');
@@ -1224,6 +1248,7 @@ const openCollection = () => {
   sfx.play('whoosh');
   fx.through(() => { $('hud').hidden = true; $('emotewheel').hidden = true; hud.closeModal(); skins.openNow('collection'); }, 220, 450);
 };
+raffles.onChange(() => skins.refreshRaffles());   // the RAFFLES tab stays current while open
 // holder skins follow the verified wallet; a gated skin that's no longer held is taken off
 skins.onGate = () => { if (wallet.status !== 'verified') { skins.close(); if (!skins.isOpen) openWallet(); } };
 const syncHolder = () => {

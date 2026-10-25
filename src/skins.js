@@ -3,6 +3,8 @@
 // The preview renders with the main renderer into the main canvas while the screen is open (no second GL context).
 import { gateFor } from './nft-gates.js';
 import { SKIN_GRADE, makeSlab, loadImage, labelCanvas, placeholderArt } from './slab.js';
+import { countdown } from './raffles.js';
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { makeCharacter } from './player.js';
@@ -105,8 +107,8 @@ export class SkinScreen {
    * getName(): current player name · needName(): true until the player has chosen one · setName(name)
    */
   /** chars: loaded gltfs by id (filled in as skins load) · loadChar(id): Promise<gltf> · allIds: every skin with a model */
-  constructor({ renderer, chars, loadChar, allIds, platform, getEquipped, onEquip, onClose, getLevel, getName, needName, setName, getLoot, getGear, getStats, transition, onMarket, onUse }) {
-    Object.assign(this, { renderer, chars, loadChar, allIds, getEquipped, onEquip, onClose, getLevel, getName, needName, setName, getLoot, getGear, getStats, onMarket, onUse });
+  constructor({ renderer, chars, loadChar, allIds, platform, getEquipped, onEquip, onClose, getLevel, getName, needName, setName, getLoot, getGear, getRaffles, getStats, transition, onMarket, onUse }) {
+    Object.assign(this, { renderer, chars, loadChar, allIds, getEquipped, onEquip, onClose, getLevel, getName, needName, setName, getLoot, getGear, getRaffles, getStats, onMarket, onUse });
     this.transition = transition || ((fn) => fn());
     this.mode = 'skins'; this.items = [];
     this.platformGltf = platform;
@@ -469,7 +471,7 @@ export class SkinScreen {
   }
   unlocked(s) { return s.owned || (s.level != null && this.getLevel() >= s.level); }
   visibleSkins() {
-    if (this.mode === 'collection') return this.items.filter((it) => this.filter === 'all' || (this.filter === 'loot' && it.kind === 'card') || (this.filter === 'gear' && it.kind === 'gear') || (this.filter === 'favorites' && this.favs.has(it.id)));
+    if (this.mode === 'collection') return this.items.filter((it) => (this.filter === 'all' && it.kind !== 'raffle') || (this.filter === 'loot' && it.kind === 'card') || (this.filter === 'gear' && it.kind === 'gear') || (this.filter === 'raffles' && it.kind === 'raffle') || (this.filter === 'favorites' && this.favs.has(it.id)));
     return SKINS.filter((s) => this.filter === 'all' || (this.filter === 'owned' && s.owned)
       || (this.filter === 'unlocked' && this.unlocked(s)) || (this.filter === 'favorites' && this.favs.has(s.id)));
   }
@@ -480,7 +482,8 @@ export class SkinScreen {
     const vis = new Set(this.visibleSkins().map((s) => s.id));
     this.el.querySelectorAll('.sk-card').forEach((c) => { c.hidden = !vis.has(c.dataset.skin); });
     this.$('sk-grid').classList.toggle('empty', vis.size === 0);
-    this.$('sk-grid').dataset.empty = f === 'favorites' ? 'Tap ★ FAVORITE on an item to pin it here' : f === 'loot' ? 'No loot yet. Win graded cards in the Wano and Kanto Vault raffles.' : 'Nothing here yet';
+    this.$('sk-grid').dataset.empty = f === 'favorites' ? 'Tap ★ FAVORITE on an item to pin it here' : f === 'loot' ? 'No loot yet. Win graded cards in the Wano and Kanto Vault raffles.' : f === 'raffles' ? 'No raffles running right now. New drops land at the Wano and Kanto Vaults.' : 'Nothing here yet';
+    if (this.mode === 'collection' && this.isOpen && f === 'raffles' && vis.size && !vis.has(this.sel)) this.select([...vis][0]);
   }
 
   select(id) {
@@ -561,6 +564,7 @@ export class SkinScreen {
   }
 
   equip() {
+    if (this.mode === 'collection' && this.item(this.sel)?.kind === 'raffle') { this.useItem(this.item(this.sel)); return; }
     if (this.mode === 'collection') { this.setZoom(this.zoomT > 1.3 ? 1 : 2.1); this.$('sk-equip').textContent = this.zoomT > 1.3 ? 'BACK TO STAND' : this.item(this.sel)?.kind === 'gear' ? 'VIEW GEAR' : 'VIEW SLAB'; return; }
     if (!this.commitName()) return;
     const s = this.skin(this.sel);
@@ -581,27 +585,44 @@ export class SkinScreen {
     this.$('sk-ptitle').textContent = col ? 'SELECT ITEM' : 'SELECT SKIN';
     this.$('sk-shop').textContent = col ? 'MARKET' : 'SHOP';
     this.$('sk-filters').innerHTML = col
-      ? '<button data-f="all">ALL</button><button data-f="loot">LOOT</button><button data-f="gear">GEAR</button><button data-f="favorites">FAVORITES</button>'
+      ? '<button data-f="all">ALL</button><button data-f="loot">LOOT</button><button data-f="gear">GEAR</button><button data-f="raffles">RAFFLES<i class="rf-n" id="sk-rfn"></i></button><button data-f="favorites" title="Favorites">★ FAVS</button>'
       : '<button data-f="all">ALL</button><button data-f="owned">OWNED</button><button data-f="unlocked">UNLOCKED</button><button data-f="favorites">FAVORITES</button>';
-    if (col && !['all', 'loot', 'gear', 'favorites'].includes(this.filter)) this.filter = 'all';
+    if (col && !['all', 'loot', 'gear', 'raffles', 'favorites'].includes(this.filter)) this.filter = 'all';
     if (!col && !['all', 'owned', 'unlocked', 'favorites'].includes(this.filter)) this.filter = 'all';
     this.$('sk-use').hidden = !col; this.$('sk-stats').hidden = !col;
     this.stand.clear(); this.shown = undefined; this.slab = null;
     if (col) {
-      this.items = this.collectionItems();
-      this.$('sk-grid').innerHTML = this.items.map((it) => this.slabCardHtml(it)).join('');
-      this.renderStats();
+      this.renderItems();
     } else {
       this.$('sk-grid').innerHTML = SKINS.map((x) => this.cardHtml(x)).join('');
       this.useThumbs(Object.keys(this.thumbs).length ? this.thumbs : { ...THUMBS, ...ART });
     }
+  }
+  renderItems() {
+    this.items = this.collectionItems();
+    this.$('sk-grid').innerHTML = this.items.map((it) => this.slabCardHtml(it)).join('');
+    const n = this.items.filter((x) => x.kind === 'raffle').length, b = this.$('sk-rfn'); if (b) b.textContent = n ? String(n) : '';
+    this.renderStats(); this.tickRaffles();
+  }
+  /** raffles changed (refresh, entry, draw) while the Collection is open: rebuild, keep the selection */
+  refreshRaffles() {
+    if (!this.isOpen || this.mode !== 'collection') return;
+    const sel = this.sel; this.renderItems(); this.setFilter(this.filter);
+    if (this.item(sel)) this.selectItem(sel); else if (this.filter === 'raffles') this.select(this.visibleSkins()[0]?.id);
+  }
+  /** live countdowns on the raffle cards and the info panel (once a second while open) */
+  tickRaffles() {
+    if (!this.el) return;
+    for (const e of this.el.querySelectorAll('[data-until]')) e.textContent = countdown(+e.dataset.until - Date.now());
+    clearTimeout(this._rt); if (this.isOpen && this.mode === 'collection') this._rt = setTimeout(() => this.tickRaffles(), 1000);
   }
   /** Collection = LOOT (graded cards won in raffles, as slabs) + GEAR (rides: scooters, hoverboards, jetpacks, in 3D) */
   collectionItems() {
     const loot = (this.getLoot?.() || []).map((c) => ({ kind: 'card', rarity: 'legendary', color: RARITY.legendary.color, ...c }));
     const gear = (this.getGear?.() || []).map((g) => ({ kind: 'gear', grade: { co: 'GEAR', n: '', word: '' }, ...g }));
     for (const g of gear) if (!g.img && g.object) g.img = this.modelThumb(g.object, g.rarity);
-    return [...loot, ...gear.filter((g) => g.owned), ...gear.filter((g) => !g.owned)];
+    const raf = (this.getRaffles?.() || []).map((r) => ({ kind: 'raffle', rarity: 'legendary', color: RARITY.legendary.color, owned: true, ...r }));
+    return [...loot, ...gear.filter((g) => g.owned), ...gear.filter((g) => !g.owned), ...raf];
   }
   /** a card portrait of a 3D object (3/4 view, rarity backdrop) as a data URL */
   modelThumb(obj, rarity = 'rare') {
@@ -634,6 +655,12 @@ export class SkinScreen {
   item(id) { return this.items.find((x) => x.id === id); }
   slabCardHtml(it) {
     const R = RARITY[it.rarity] || RARITY.common;
+    if (it.kind === 'raffle') {   // a live raffle: the prize slab, its vault, a countdown and whether you're in
+      const lbl = `<span class="sl-lbl ${it.grade.co === 'BVG' ? 'bvg' : ''}"><i>${esc(it.grade.co)}</i><em>${esc(it.name)}</em><b>${esc(it.grade.n)}</b></span>`;
+      return `<button class="sk-card slab-card raffle-card ${it.entered ? 'in' : ''}" data-skin="${it.id}" style="--rc:${it.vault === 'wano' ? '#ff5a3d' : '#ffcb05'};--rb0:${R.bg[0]};--rb1:${R.bg[1]}">
+        <span class="art slab">${it.slabPhoto ? '' : lbl}<img alt="" src="${it.img}" class="${it.slabPhoto ? 'photo' : ''}"><em class="rf-v">${it.vault === 'wano' ? 'WANO' : 'KANTO'}</em>${it.entered ? '<em class="rf-in">ENTERED ✓</em>' : ''}</span>
+        <b>${esc(it.name)}</b><small class="rar rf-cd" data-until="${it.until}">${countdown(it.until - Date.now())}</small><small class="selt">SELECTED</small></button>`;
+    }
     if (it.kind === 'gear') return `<button class="sk-card gear-card ${it.owned ? '' : 'locked'}" data-skin="${it.id}" style="--rc:${R.color};--rb0:${R.bg[0]};--rb1:${R.bg[1]}">
       <span class="art"><img alt="" src="${it.img}">${it.owned ? '' : `<i class="lk">${LOCK}</i>`}</span>
       <b>${it.name}</b><small class="rar">${it.owned ? 'GEAR · OWNED' : 'COMING SOON'}</small><small class="selt">SELECTED</small></button>`;
@@ -653,7 +680,7 @@ export class SkinScreen {
     const R = RARITY[it.rarity] || RARITY.common;
     this.$('sk-name').textContent = it.name;
     const pill = this.$('sk-pill');
-    pill.innerHTML = it.kind === 'gear' ? `GEAR<span class="pl-r"> · ${it.owned ? 'OWNED' : 'COMING SOON'} / ${R.label.toUpperCase()}</span>` : `${it.grade.co} ${it.grade.n}<span class="pl-r"> ${`${it.grade.word} / ${R.label}`.toUpperCase()}</span>`;
+    pill.innerHTML = it.kind === 'raffle' ? `LIVE RAFFLE<span class="pl-r"> · ${it.vault === 'wano' ? 'WANO' : 'KANTO'} VAULT · <span data-until="${it.until}">${countdown(it.until - Date.now())}</span></span>` : it.kind === 'gear' ? `GEAR<span class="pl-r"> · ${it.owned ? 'OWNED' : 'COMING SOON'} / ${R.label.toUpperCase()}</span>` : `${it.grade.co} ${it.grade.n}<span class="pl-r"> ${`${it.grade.word} / ${R.label}`.toUpperCase()}</span>`;
     pill.style.setProperty('--rc', R.color);
     this.$('sk-desc').textContent = it.owned ? it.desc : `${it.lock ? it.lock + '. ' : ''}${it.desc || ''}`;
     this.$('sk-icons').innerHTML = (it.boosts || []).map(([ic, label], i) => `<span class="${i === 0 ? 'on' : ''}" title="${label}">${ICONS[ic]}</span>`).join('');
@@ -661,9 +688,10 @@ export class SkinScreen {
     const eq = this.getEquipped();
     this.el.querySelectorAll('.sk-card').forEach((c) => { c.classList.toggle('sel', c.dataset.skin === id); c.classList.toggle('equipped', c.dataset.skin === 'skin:' + eq); });
     this.el.querySelector(`[data-skin="${id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
-    const btn = this.$('sk-equip'); btn.disabled = false; btn.textContent = this.zoomT > 1.3 ? 'BACK TO STAND' : it.kind === 'gear' ? 'VIEW GEAR' : 'VIEW SLAB';
+    const btn = this.$('sk-equip'); btn.disabled = false; btn.textContent = it.kind === 'raffle' ? `GO TO ${it.vault === 'wano' ? 'WANO' : 'KANTO'} VAULT` : this.zoomT > 1.3 ? 'BACK TO STAND' : it.kind === 'gear' ? 'VIEW GEAR' : 'VIEW SLAB';
     const use = this.$('sk-use');
-    if (it.kind === 'gear') { use.hidden = !it.owned; use.disabled = false; use.textContent = it.action || 'RIDE IT'; }
+    if (it.kind === 'raffle') use.hidden = true;   // entering happens at the vault, not from the menu
+    else if (it.kind === 'gear') { use.hidden = !it.owned; use.disabled = false; use.textContent = it.action || 'RIDE IT'; }
     else if (it.kind === 'skin' && it.owned) { use.hidden = false; use.disabled = it.skin === eq; use.textContent = it.skin === eq ? 'EQUIPPED ✓' : 'EQUIP THIS SKIN'; }
     else if (it.action) { use.hidden = false; use.disabled = false; use.textContent = it.action; }
     else if (it.url) { use.hidden = false; use.disabled = false; use.textContent = it.owned ? 'VIEW ON-CHAIN ↗' : 'SEE THE PRIZE ↗'; }

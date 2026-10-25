@@ -713,3 +713,8 @@ Added next to the Solana setup without changing it (Solana sign-in, holder skins
 - **Admin:** each raffle has **3D MODEL (GLB)** (upload: checked to be a real `.glb`, max 3 MB, stored in the `prizes` bucket; or paste an https link) and **SHOWCASE SPOT** (Auto / 1 left / 2 middle / 3 right). The list marks raffles with 3D / SPOT badges.
 - Wano keeps its pedestal holograms for now; its raffles can carry a model too, but only Kanto shows them so far.
 - Test: `tools/kanto_packs_test.mjs`; admin upload/validation in `tools/api_admin_test.mjs`.
+
+## Collection → RAFFLES tab (Oct 25)
+- The Collection has a **RAFFLES** tab (red count badge) listing every open raffle at both vaults, soonest draw first: the prize slab, a WANO/KANTO tag, a live countdown, and an **ENTERED ✓** badge when you're in. ALL still means *your* stuff (loot + gear); raffles only show in their own tab.
+- It's look-only: there is no enter button in the menu. The main button reads **GO TO KANTO VAULT / GO TO WANO VAULT**, closes the Collection and puts you at that vault's door facing it ("press E at the door to enter"). Entering still happens at the door (or a Kanto floating pack).
+- The tab updates live (`raffles.onChange` → `SkinScreen.refreshRaffles()`). Code: `collectionRaffles()` / `goToVault()` in `src/main.js`; `kind: 'raffle'` items in `src/skins.js`. Test: `tools/collection_raffles_test.mjs` (desktop, and `TOUCH=1 W=844 H=390` for phones).
