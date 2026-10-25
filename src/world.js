@@ -4,17 +4,6 @@ import { billboardCreatives, tickerTexture, cardTexture, labelTexture, isOpenSlo
 import { Physics, toWorldFloat } from './physics.js';
 import { RWA_ASSETS, rwaSlabTexture } from './rwa.js';
 
-let haloTex = null;
-/** soft round glow (white centre fading to nothing), shared by every showcase halo */
-function haloTexture() {
-  if (haloTex) return haloTex;
-  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
-  const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.3, 'rgba(255,255,255,.75)'); r.addColorStop(0.6, 'rgba(255,255,255,.22)'); r.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = r; g.fillRect(0, 0, 128, 128);
-  haloTex = new THREE.CanvasTexture(c); haloTex.colorSpace = THREE.SRGBColorSpace; return haloTex;
-}
-
 function bakeToWorld(o) {
   const g = toWorldFloat(o);
   o.geometry = g;
@@ -239,25 +228,12 @@ export class World {
         const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, toneMapped: false, depthWrite: false })); spr.scale.set(2.6, 0.8, 1); spr.position.set(pos.x, pos.y + 1.85, pos.z); this.scene.add(spr);
         const L = { cv, tex, name: sp.label[0], raffle: true };
         (this.holoLabels ||= []).push(L);
-        // display-case lighting (no real lights, so it costs nothing on phones): a soft halo behind the pack and a
-        // light column rising from the ring; both, and the pack's own glow, get stronger as the sky darkens
-        const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture(), color: 0xffcf9a, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }));
-        halo.scale.set(5, 5, 1); halo.position.copy(pos); halo.renderOrder = -1; this.scene.add(halo);
-        const column = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 4.2, 32, 1, true), new THREE.ShaderMaterial({
-          transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false,
-          uniforms: { uA: { value: 0.3 }, uC: { value: new THREE.Color(0xff5a4a) } },
-          // brightest at the floor and facing the camera, fading upward and towards the edges (soft light, not a tube)
-          vertexShader: 'varying float vY; varying float vF; void main(){ vY = uv.y; vec4 mv = modelViewMatrix * vec4(position,1.0); vF = abs(dot(normalize(normalMatrix * normal), normalize(-mv.xyz))); gl_Position = projectionMatrix * mv; }',
-          fragmentShader: 'uniform float uA; uniform vec3 uC; varying float vY; varying float vF; void main(){ gl_FragColor = vec4(uC, uA * pow(1.0 - vY, 3.0) * pow(vF, 2.0)); }' }));
-        column.position.set(pos.x, pos.y - 2.3 + 2.1, pos.z); this.scene.add(column);
-        const sc = { holder, pos, label: L, zone: sp.zone, slot: sp.slot, halo, column, ring, glowMats: [] };
+        const sc = { holder, pos, label: L, zone: sp.zone, slot: sp.slot, ring, glowMats: [] };
         (this.showcases[sp.zone] ||= [])[sp.slot] = sc;
         this.anim.push((t) => {
           holder.rotation.y = t * 0.7 + i * 2.1; holder.position.y = pos.y + Math.sin(t * 1.3 + i) * 0.14;
           const g = this.packGlow ?? 0, pulse = Math.sin(t * 2 + i);
           ring.material.opacity = (0.4 + 0.35 * g) + (0.2 + 0.1 * g) * pulse;
-          halo.material.opacity = 0.12 + 0.7 * g + 0.06 * pulse; halo.position.y = holder.position.y;
-          column.material.uniforms.uA.value = 0.06 + 0.16 * g;
         });
         return;
       }
@@ -296,8 +272,8 @@ export class World {
       o.traverse((m) => {
         if (!m.isMesh || !m.material) return; m.castShadow = false;
         m.material = (Array.isArray(m.material) ? m.material : [m.material]).map((x) => {
-          const q = x.clone(); q.side = THREE.DoubleSide; q.envMapIntensity = 1.2;
-          // lit from within like a backlit display: the print glows in its own colours
+          const q = x.clone(); q.side = THREE.DoubleSide; q.envMapIntensity = 1.2; q.transparent = false; q.opacity = 1; q.depthWrite = true; q.depthTest = true; if (q.map && q.alphaTest === 0 && x.transparent) q.alphaTest = 0.5;
+          // the print is lit evenly in its own colours so it stays readable at night (no halo or bloom around it)
           if (q.emissive) { if (q.map) { q.emissive.set(0xffffff); q.emissiveMap = q.map; } else if (q.emissive.getHex() === 0) q.emissive.copy(q.color || new THREE.Color(1, 1, 1)); sc.glowMats.push(q); }
           return q;
         });
@@ -313,7 +289,7 @@ export class World {
   /** 0 = full daylight … 1 = night: how strongly the vault showcases light themselves */
   setPackGlow(level) {
     this.packGlow = Math.max(0, Math.min(1, level));
-    for (const z of Object.values(this.showcases || {})) for (const sc of z || []) for (const m of sc?.glowMats || []) m.emissiveIntensity = 0.1 + 0.55 * this.packGlow;
+    for (const z of Object.values(this.showcases || {})) for (const sc of z || []) for (const m of sc?.glowMats || []) m.emissiveIntensity = 0.12 + 0.38 * this.packGlow;
   }
 
   setupSmoke(anchors) {
