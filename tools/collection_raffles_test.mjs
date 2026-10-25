@@ -28,8 +28,8 @@ console.log('entered desc:', await p.textContent('#sk-desc'));
 await p.evaluate(() => document.querySelector('.raffle-card:not(.in)').click()); await frames(6);
 await p.screenshot({ path: '/tmp/claude-0/collection_raffles' + (process.env.TOUCH ? '_phone' : '') + '.png', timeout: 600000 });
 // wano card → go to vault
-await p.evaluate(() => [...document.querySelectorAll('.raffle-card')].find((c) => c.querySelector('.rf-v').textContent === 'WANO').click()); await frames(2);
-console.log('wano button:', await p.textContent('#sk-equip'));
+console.log('wano raffle hidden (vault coming soon):', await p.evaluate(() => ![...document.querySelectorAll('.raffle-card')].some((c) => c.querySelector('.rf-v').textContent === 'WANO')));
+console.log('button:', await p.textContent('#sk-equip'));
 await p.evaluate(() => document.getElementById('sk-equip').click());
 await p.waitForFunction(() => document.getElementById('skins').hidden, null, { timeout: 60000 }); await frames(8);
 console.log('prompt at vault:', await p.textContent('#prompt'));

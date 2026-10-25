@@ -30,6 +30,7 @@ export const VAULTS = {
     centre: [53.6, -22], ground: 1.2, front: [-1, 0],                // on the old plinth (top 1.2 m), door faces west
     cuts: [{ type: 'box', c: [50.25, -22], n: [-1, 0], halfW: 11.2, halfD: 11.6, y1: 34, floorY: 1.3 }],
     holos: { dist: 6.6, spread: 5.5, y: 0.7 },                       // metres in front of the door: forecourt on the plinth
+    comingSoon: true,                                                // test play: no raffles yet; a floating COMING SOON sign instead of the showcases
   },
   apex_arena: {
     id: 'kanto', label: 'KANTO VAULT', theme: 'pokemon', color: '#ff3b3b',
@@ -125,7 +126,7 @@ export function prepareVaults(world, models) {
   // holograms: Wano = the real Luffy slab between two mystery One Piece slabs; Kanto = three mystery Pokemon slabs
   world.holoSpecs = [];
   for (const [zid, V] of active) {
-    if (!V.holos) continue;
+    if (!V.holos || V.comingSoon) continue;
     const spots = holoSpots(V), { n } = frame(V);
     spots.forEach((p, i) => {
       if (V.packs) { world.holoSpecs.push({ pos: p.clone().setY(V.ground + 2.45), facing: Math.atan2(n.x, n.z), kind: 'pack', slot: i, theme: V.theme, label: ['POKÉMON RAFFLE', 'GRADED CARD · TBA'], zone: zid }); return; }
@@ -149,7 +150,7 @@ export function prepareVaults(world, models) {
     };
     for (const [, V] of active) {
       const src = modelSource(models[V.model]); if (src) addGeo(src.geo, modelMatrix(V));
-      if (!V.holos || V.packs) continue;
+      if (!V.holos || V.packs || V.comingSoon) continue;
       const ped = new THREE.CylinderGeometry(PED.r, PED.r, PED.h, 12).translate(0, PED.h / 2, 0);
       for (const p of holoSpots(V)) addGeo(ped, new THREE.Matrix4().makeTranslation(p.x, V.ground, p.z));
     }
@@ -159,6 +160,22 @@ export function prepareVaults(world, models) {
     collider.removeFromParent(); collider.position.set(0, 0, 0); collider.quaternion.identity(); collider.scale.set(1, 1, 1); collider.updateMatrix(); collider.updateMatrixWorld(true);   // matrixAutoUpdate is off for world meshes
     console.log('landmarks: collider', removed, 'old triangles cut');
   };
+}
+
+/** a vault that isn't open yet: a big COMING SOON sign floating over its forecourt, always facing the player */
+function comingSoonSign(scene, world, V) {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 384; const g = c.getContext('2d');
+  g.fillStyle = 'rgba(12,8,14,.88)'; g.beginPath(); g.roundRect(14, 14, 996, 356, 36); g.fill();
+  g.shadowColor = V.color; g.shadowBlur = 28; g.strokeStyle = V.color; g.lineWidth = 10; g.beginPath(); g.roundRect(14, 14, 996, 356, 36); g.stroke();
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.shadowColor = '#ffffff'; g.shadowBlur = 18; g.fillStyle = '#ffffff'; g.font = '800 150px Rajdhani, "Arial Black", sans-serif'; g.fillText('COMING SOON', 512, 168);
+  g.shadowColor = V.color; g.shadowBlur = 12; g.fillStyle = V.color; g.font = '700 50px Rajdhani, sans-serif'; g.fillText(`${V.label} · ONE PIECE RAFFLES`, 512, 290);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, toneMapped: false, depthWrite: false }));
+  const { n, door } = frame(V), base = door.clone().addScaledVector(n, V.holos.dist).setY(V.ground + 3.5);
+  sign.scale.set(7.2, 2.7, 1); sign.position.copy(base); scene.add(sign);
+  world.anim?.push((t) => { sign.position.y = base.y + Math.sin(t * 1.1) * 0.18; });
+  const L = new THREE.PointLight(V.color, 14, 16, 2); L.position.copy(door).addScaledVector(n, 2).setY(V.ground + 4); scene.add(L);
 }
 
 /** call after world.init: cut the old visuals, add the vault meshes, pedestals and door lights */
@@ -191,6 +208,7 @@ export function placeVaults(scene, world, models, { shadows = true } = {}) {
     modelMatrix(V).decompose(m.position, m.quaternion, m.scale);
     m.castShadow = shadows; m.receiveShadow = true; scene.add(m);
     if (!V.holos) continue;
+    if (V.comingSoon) { comingSoonSign(scene, world, V); continue; }
     if (V.packs) { const { n, door } = frame(V), L = new THREE.PointLight(V.color, 14, 16, 2); L.position.copy(door).addScaledVector(n, 2).setY(V.ground + 4); scene.add(L); continue; }   // no pedestals: the packs float
     const rim = new THREE.MeshStandardMaterial({ color: V.color, emissive: V.color, emissiveIntensity: 0.8, roughness: 0.3, metalness: 0.6 });
     for (const p of holoSpots(V)) {

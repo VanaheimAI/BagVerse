@@ -65,7 +65,7 @@ export class MissionsUI {
       </ul>
       <h4>RWA prize kiosks</h4>
       <ul class="mq-facts">${KIOSKS.map((k) => `<li><b>${esc(k.name)}</b> ${esc(k.event)}: ${esc(k.prize)}. Free entry, Lv ${TIER_LEVEL[k.tier]}+.</li>`).join('')}
-        <li><b>Wano Vault</b> graded One Piece card raffles (east of the plaza); <b>Kanto Vault</b> graded Pokémon raffles (far south-east).</li></ul>
+        <li><b>Kanto Vault</b> graded Pokémon raffles (Bull Run, south-east); <b>Wano Vault</b> One Piece raffles coming soon (east of the plaza).</li></ul>
       <h4>Controls</h4>
       <p class="mq-small">${this.touch ? 'Left stick move · drag right side to look · JUMP · E interact · 💃 emotes · 🛴 scooter · tap this tracker for missions' : 'WASD move · Shift walk · Space jump · E interact · 1 / 2 emotes · F flashmob · R scooter · J missions · K skins · M map · Enter chat'}</p>`;
   }

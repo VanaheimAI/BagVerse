@@ -23,6 +23,8 @@ export const RARITY = {
 };
 
 // id = character GLB in public/assets (owned skins); locked skins have no model yet
+// skins taken off the roster for now (test play): not selectable, not in the crowd; their models stay in public/assets
+export const HIDDEN_SKINS = ['kaizokuguy', 'kaizokugirl'];
 export const SKINS = [
   { id: 'shiba', name: 'SHIB GIRL', rarity: 'epic', owned: true,
     desc: 'Doge-pack streetwear for trench runners. Ears up, bags packed, never selling the dip.',
@@ -75,6 +77,7 @@ export const SKINS = [
   { id: 'cyber_green', name: 'CYBER GREEN', rarity: 'rare', owned: false, level: 25,
     desc: 'Neon-lime tech wear for degen runners. Unlocks at level 25.', boosts: [['speed', 'Dash Trail · Glitch'], ['shield', 'Circuit Aura']] },
 ];
+for (let i = SKINS.length - 1; i >= 0; i--) if (HIDDEN_SKINS.includes(SKINS[i].id)) SKINS.splice(i, 1);
 
 const ICONS = {
   speed: '<svg viewBox="0 0 24 24"><path d="M3 15c4-1 7-3 9-7l2 1c-1 2-1 4 0 5 2-2 5-3 8-3-3 2-5 4-6 7-3 1-8 0-13-3z"/><path d="M2 11l6-1M3 8l5 0" stroke-width="1.6"/></svg>',

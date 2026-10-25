@@ -13,7 +13,7 @@ export const TUTORIAL = [
   { id: 'gm', title: 'Say GM', hint: { key: 'Press Enter, type gm, press Enter', touch: 'Tap 💬, type gm and send' }, ev: 'chat', need: 1, xp: 70 },
   { id: 'dance', title: 'Bust a move', hint: { key: 'Press 2 to Dance (unlocked at Lv 2)', touch: 'Tap 💃, then Dance' }, ev: 'emote', need: 1, xp: 90 },
   { id: 'ride', title: 'Ride your scooter', hint: { key: 'Press R to summon the Punk Scooter, then W to ride 50 m', touch: 'Tap 🛴 and push the stick forward for 50 m' }, ev: 'ride', need: 50, xp: 150, unit: 'm' },
-  { id: 'vault', title: 'Visit the Wano Vault', hint: { key: 'Follow the gold beacon to the Wano Vault (One Piece card raffles)', touch: 'Follow the gold beacon to the Wano Vault' }, ev: 'zone', match: 'rwa_vault', need: 1, xp: 120, target: 'vault' },
+  { id: 'vault', title: 'Visit the Kanto Vault', hint: { key: 'Follow the gold beacon to the Kanto Vault (Pokémon card raffles)', touch: 'Follow the gold beacon to the Kanto Vault' }, ev: 'zone', match: 'apex_arena', need: 1, xp: 120, target: 'vault' },
   { id: 'prizes', title: "Check this week's prizes", hint: { key: 'Walk up to the Vault doors and press E', touch: 'Stand at the Vault doors and tap E' }, ev: 'rwa_view', need: 1, xp: 100, target: 'vault' },
   { id: 'bag', title: 'Find a hidden Bag', hint: { key: '220 green money Bags are hidden across the districts; the beacon marks the nearest', touch: 'Follow the beacon to the nearest green Bag' }, ev: 'bag', need: 1, xp: 150, target: 'bag' },
   { id: 'ad', title: 'Watch a billboard', hint: { key: 'Look at an ad screen for 10 seconds', touch: 'Point the camera at an ad screen for 10 s' }, ev: 'billboard', need: 1, xp: 90 },

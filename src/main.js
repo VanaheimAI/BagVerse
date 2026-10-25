@@ -20,7 +20,7 @@ import { acceleratedRaycast } from 'three-mesh-bvh';
 import { Input } from './input.js';
 import { World } from './world.js';
 import { RWA_ASSETS, shortMint } from './rwa.js';
-import { SkinScreen, SKINS } from './skins.js';
+import { SkinScreen, SKINS, HIDDEN_SKINS } from './skins.js';
 import { Player, FollowCamera, say, setEmoteLoader, ensureClip, twoBoneIK, armChains } from './player.js';
 import { Crowd } from './npcs.js';
 import { Car } from './vehicle.js';
@@ -185,6 +185,7 @@ const CHAR_IDS = ['goldenking', 'habibi', 'shiba', 'solanagirl', 'witch', 'vampi
 const CHARS = {}, charLoads = {};
 let charId = params.get('char') || store.get('bagverse.char') || 'goldenking';
 if (charId === 'queen') charId = 'solanagirl';   // Solana Queen retired: her owners get Solana Girl
+for (const h of HIDDEN_SKINS) { const k = CHAR_IDS.indexOf(h); if (k >= 0) CHAR_IDS.splice(k, 1); }   // off the roster for now (wearers fall back to Golden King)
 if (!CHAR_IDS.includes(charId)) charId = 'goldenking';
 const CROWD_N = SAFE ? 1 : { low: 3, medium: 5, high: 16 }[quality];
 const crowdIds = [charId, ...CHAR_IDS.filter((id) => id !== charId)].slice(0, CROWD_N);
@@ -598,7 +599,7 @@ function openWallet() {
 walletBtn?.addEventListener('click', () => { $('hud').classList.remove('menu-open'); openWallet(); });
 
 if (crashNote) hud.chat('SYSTEM', 'BagVerse', crashNote, '#ffc83d');
-hud.chat('SYSTEM', 'BagVerse', 'Welcome to The Bag Square. Visit the Wano Vault for graded One Piece card raffles; Kanto Vault (far south-east) holds the Pokémon ones.', '#7cff3d');
+hud.chat('SYSTEM', 'BagVerse', 'Welcome to The Bag Square (alpha test). Graded Pokémon card raffles are live at the Kanto Vault in Bull Run; the Wano Vault (One Piece) opens soon.', '#7cff3d');
 if (car) hud.chat('SYSTEM', 'BagVerse', 'A Vision 1789 is parked on the road behind you (gold on the minimap). Walk up and press E to drive.', '#ffc83d');
 if (scooter) hud.chat('SYSTEM', 'BagVerse', `Your PUNK SCOOTER is in your garage. Press ${input.touch ? 'the 🛴 button' : 'R'} to ride.`, '#ffc83d');
 // ---------------------------------------------------------------- multiplayer (claude.ai room: everyone with the page open)
@@ -806,7 +807,7 @@ function progressFrame(dt, t) {
   // guide beacon: the tutorial's target, else nothing
   const step = quests.current;
   let target = null, color = '#7cff3d';
-  if (step?.target === 'vault') { const f = vaultFront('rwa_vault'); const vz = world.zones.find((x) => x.id === 'rwa_vault'); if (f) { target = f.clone(); color = '#ffc83d'; } else if (vz) { target = vz.pos.clone(); target.y = world.physics.groundAt(vz.pos.x, vz.pos.z + 9, 8); target.z += 9; color = '#ffc83d'; } }
+  if (step?.target === 'vault') { const tv = VAULTS.rwa_vault.comingSoon ? 'apex_arena' : 'rwa_vault', f = vaultFront(tv); const vz = world.zones.find((x) => x.id === tv); if (f) { target = f.clone(); color = '#ffc83d'; } else if (vz) { target = vz.pos.clone(); target.y = world.physics.groundAt(vz.pos.x, vz.pos.z + 9, 8); target.z += 9; color = '#ffc83d'; } }
   else if (step?.target === 'bag') { const b = collect.nearestBag(P); if (b) target = b.pos; }
   if (bagRun.active) { target = bagRun.nextBag(P); color = '#ffc83d'; }
   collect.setBeacon(target, color);
@@ -1128,6 +1129,7 @@ function interactions(dt) {
     const vz = world.zones.find((z) => z.id === zid); if (!vz) continue;
     const f = vaultFront(zid) || vz.pos;
     if (Math.hypot(p.x - f.x, p.z - f.z) > 7 || Math.abs(p.y - f.y) > 4) continue;
+    if (VAULTS[zid].comingSoon) { promptHtml = `<kbd>E</kbd> ${vz.label} · COMING SOON`; action = () => { quests.emit('rwa_view', 1, { id: 'vault' }); sfx.play('scandeny'); hud.toast(`${vz.label} OPENS SOON · POKÉMON RAFFLES ARE LIVE AT THE KANTO VAULT (BULL RUN)`); }; continue; }
     const nOpen = raffles.openFor(zid === 'rwa_vault' ? 'wano' : 'kanto').length;
     promptHtml = `<kbd>E</kbd> ${vz.label} · ${nOpen > 1 ? `${nOpen} RAFFLES` : "THIS WEEK'S RAFFLE"}`;
     action = () => { quests.emit('rwa_view', 1, { id: zid === 'rwa_vault' ? 'vault' : 'kanto' }); openVault(zid, vz.label); };
@@ -1143,7 +1145,6 @@ const pickChar = (id) => {
   if (!CHARS[id]) return;
   charId = id; player.setModel(CHARS[id]); look.setupShadows(player.root);
   try { localStorage.setItem('bagverse.char', id); } catch (_) {}
-  document.querySelectorAll('#enter button').forEach((b) => b.classList.toggle('on', b.dataset.char === id));
 };
 pickChar(charId);
 const start = () => {
@@ -1213,7 +1214,7 @@ function raffleModel(r) {
 }
 // live raffles for the Collection's RAFFLES tab: look only; entering happens at the vault itself
 function collectionRaffles() {
-  return ['kanto', 'wano'].flatMap((v) => raffles.openFor(v)).sort((a, b) => Date.parse(a.draws_at) - Date.parse(b.draws_at)).map((r) => {
+  return ['kanto', ...(VAULTS.rwa_vault.comingSoon ? [] : ['wano'])].flatMap((v) => raffles.openFor(v)).sort((a, b) => Date.parse(a.draws_at) - Date.parse(b.draws_at)).map((r) => {
     const pz = r.prize || {}, local = RWA_ASSETS.find((a) => a.mint && a.mint === pz.mint), V = r.vault === 'wano' ? 'Wano' : 'Kanto', inn = raffles.entered(r.id);
     const lvl = r.min_level | 0, place = r.vault === 'wano' ? 'east of the plaza' : 'in Bull Run';
     return { id: 'raffle:' + r.id, raffleId: r.id, vault: r.vault, name: pz.name || 'Graded card', sub: pz.set || (r.vault === 'wano' ? 'Graded One Piece card' : 'Graded Pokémon card'),

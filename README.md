@@ -719,3 +719,8 @@ Added next to the Solana setup without changing it (Solana sign-in, holder skins
 - It's look-only: there is no enter button in the menu. The main button reads **GO TO KANTO VAULT / GO TO WANO VAULT**, closes the Collection and puts you at that vault's door facing it ("press E at the door to enter"). Entering still happens at the door (or a Kanto floating pack).
 - Cards and the 3D stand use the raffle's **GLB** (the model uploaded in /admin), or for Kanto the placeholder booster pack in its showcase spot; a GLB that fails to load falls back to the pack (Kanto) or the slab card (Wano without a model). Model portraits are rendered once per file.
 - The tab updates live (`raffles.onChange` → `SkinScreen.refreshRaffles()`). Code: `collectionRaffles()` / `goToVault()` in `src/main.js`; `kind: 'raffle'` items in `src/skins.js`. Test: `tools/collection_raffles_test.mjs` (desktop, and `TOUCH=1 W=844 H=390` for phones).
+
+## Test-play cleanup (Oct 25)
+- **Wano Vault = coming soon:** `VAULTS.rwa_vault.comingSoon` (landmarks.js). No showcases or pedestals; a floating COMING SOON sign over the forecourt; the door prompt reads "WANO VAULT · COMING SOON" and points players to Kanto; Wano raffles stay out of the Collection. The tutorial's vault steps and beacon now lead to the Kanto Vault. Set `comingSoon` to false to bring it all back.
+- **Kaizoku Guy / Girl off the roster:** `HIDDEN_SKINS` in skins.js (models stay in public/assets). Players who had one equipped get Golden King.
+- Removed the Kanto Vault kiosk (its prompt covered the vault door) and the old hidden character picker on the loading screen. Welcome chat and help text updated. Test: `tools/testplay_test.mjs`.

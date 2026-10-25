@@ -33,7 +33,7 @@ export const KIOSKS = [
   { id: 'k_hodl', zone: 'hodl_heights', name: 'HODL Heights Kiosk', tier: 2, prize: 'Tokenized gold watch', event: 'Heights High Score', game: 'vaultheist', gameName: 'Vault Heist' },
   { id: 'k_copium', zone: 'copium', name: 'Copium Refinery Kiosk', tier: 2, prize: '10 g tokenized gold', event: 'Refinery Rush', game: 'vaultheist', gameName: 'Vault Heist' },
   { id: 'k_arcade', zone: 'arcade', name: 'Arcade Kiosk', tier: 2, prize: 'Graded grail card (PSA 10)', event: 'Arcade Masters', game: 'arcade', gameName: 'Arcade Dance-Off' },
-  { id: 'k_apex', zone: 'apex_arena', name: 'Kanto Vault Kiosk', tier: 3, prize: 'Graded Pokémon card (PSA 10)', event: 'Kanto Pokémon Raffle', game: 'bagrun', gameName: 'Bag Run' },
+  // (no kiosk in apex_arena: the Kanto Vault stands there, and a kiosk prompt would cover its door)
 ];
 export const TIER_LEVEL = { 1: 25, 2: 50, 3: 100 };
 
