@@ -7,6 +7,7 @@ import '@fontsource/permanent-marker/latin-400.css';
 import './admin.css';
 import { getWallets } from '@wallet-standard/app';
 import { ADMIN_WALLET, TREASURY } from '../treasury.js';
+import { buildRefundTx } from './refund-tx.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -233,29 +234,66 @@ function csv() {
 }
 
 // ------------------------------------------------------------------ ads
+// Players pay (Solana Pay, USDC to the treasury) and upload their own image; it goes live at once. The admin can
+// pull any ad (veto), reinstate it, and refund the payment from the treasury wallet back to the account that paid.
 async function showAds() {
   const main = $('#main');
   main.innerHTML = `<section class="card"><h2>BILLBOARD ADS</h2>
-    <p class="hint">Players rent screens in the game with Solana Pay. Payments (USDC) go to the treasury <a class="mono" href="https://solscan.io/account/${TREASURY}" target="_blank" rel="noopener">${TREASURY}</a>.
-    Check a booking's payment, add the advertiser's image, then put it live (7 days).</p><div id="abody"><p class="empty">Loading…</p></div></section>`;
+    <p class="hint">Players rent screens in the game: they pay with Solana Pay (USDC to the treasury <a class="mono" href="https://solscan.io/account/${TREASURY}" target="_blank" rel="noopener">${short(TREASURY)}</a>), then upload their own image, which goes live for 7 days.
+    You can <b>pull</b> any ad, put it back, or <b>refund</b> the payment from this wallet.</p><div id="abody"><p class="empty">Loading…</p></div></section>`;
   try { cache.ads = (await api('ads')).ads; } catch (e) { $('#abody').innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
-  const el = $('#abody');
-  el.innerHTML = `<div class="tablewrap"><table><thead><tr><th>BOOKING</th><th>SCREEN</th><th>PRICE</th><th>STATUS</th><th>BY</th><th>CREATED</th><th>PAYMENT</th><th>CREATIVE</th><th></th></tr></thead><tbody>
-    ${cache.ads.map((a) => `<tr><td class="mono">${esc(a.id)}</td><td>${esc(a.slot)} <span class="hint">${esc(a.tier || '')}</span></td><td>${a.amount} ${esc(a.currency)}</td>
-      <td><span class="st ${a.status}">${a.status.toUpperCase()}</span>${a.ends_at && a.status === 'live' ? `<br><span class="hint">until ${fmt(a.ends_at)}</span>` : ''}</td><td>${esc(a.payer_name || '—')}</td><td>${fmt(a.created_at)}</td>
-      <td class="mono">${a.signature ? `<a href="https://solscan.io/tx/${esc(a.signature)}" target="_blank" rel="noopener">${short(a.signature)}</a>` : `<button class="btn sm" data-check="${a.id}">CHECK</button>`}</td>
-      <td>${a.creative_url ? `<a href="${esc(a.creative_url)}" target="_blank" rel="noopener"><img src="${esc(a.creative_url)}" alt="" style="width:64px;height:36px;object-fit:cover;border-radius:4px"></a>` : ''}<label class="btn sm" style="margin-left:6px">${a.creative_url ? 'CHANGE' : 'ADD'}<input type="file" accept="image/*" hidden data-up="${a.id}"></label></td>
-      <td class="split">${a.status === 'paid' ? `<button class="btn sm go" data-live="${a.id}" ${a.creative_url ? '' : 'disabled title="Add the creative first"'}>GO LIVE</button>` : ''}${a.status === 'live' ? `<button class="btn sm" data-end="${a.id}">END</button>` : ''}${['pending', 'paid'].includes(a.status) ? `<button class="btn sm warn" data-cx="${a.id}">CANCEL</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">No bookings yet. Players book from a screen in the game (E near a billboard).</td></tr>'}
-    </tbody></table></div>`;
-  const act = (sel, fn) => el.querySelectorAll(sel).forEach((b) => (b.onclick = async () => { try { await fn(b); showAds(); } catch (e) { toast(e.message, true); } }));
+  const el = $('#abody'), expired = (a) => a.status === 'live' && a.ends_at && Date.parse(a.ends_at) < Date.now();
+  el.innerHTML = `<div class="tablewrap"><table><thead><tr><th>CREATIVE</th><th>SCREEN</th><th>PRICE</th><th>STATUS</th><th>BY</th><th>BOOKED</th><th>PAYMENT</th><th></th></tr></thead><tbody>
+    ${cache.ads.map((a) => `<tr>
+      <td>${a.creative_url ? `<a href="${esc(a.creative_url)}" target="_blank" rel="noopener"><img src="${esc(a.creative_url)}" alt="" style="width:96px;height:54px;object-fit:cover;border-radius:5px;border:1px solid var(--edge)"></a>` : '<span class="hint">no image yet</span>'}</td>
+      <td><b>${esc(a.slot)}</b> <span class="hint">${esc(a.tier || '')}</span><br><span class="mono hint">${esc(a.id)}</span></td><td>${a.paid_amount ?? a.amount} ${esc(a.currency)}</td>
+      <td><span class="st ${expired(a) ? 'ended' : a.status}">${expired(a) ? 'ENDED' : a.status.toUpperCase()}</span>${a.status === 'live' && !expired(a) ? `<br><span class="hint">until ${fmt(a.ends_at)}</span>` : ''}${a.pulled_reason ? `<br><span class="hint">${esc(a.pulled_reason)}</span>` : ''}</td>
+      <td>${esc(a.payer_name || '—')}${a.payer_address ? `<br><a class="mono" href="https://solscan.io/account/${esc(a.payer_address)}" target="_blank" rel="noopener">${short(a.payer_address)}</a>` : ''}</td><td>${fmt(a.created_at)}</td>
+      <td class="mono">${a.signature ? `<a href="https://solscan.io/tx/${esc(a.signature)}" target="_blank" rel="noopener">paid ${short(a.signature)}</a>` : a.status === 'pending' ? `<button class="btn sm" data-check="${a.id}">CHECK</button>` : '—'}
+        ${a.refund_signature ? `<br><a href="https://solscan.io/tx/${esc(a.refund_signature)}" target="_blank" rel="noopener">refund ${short(a.refund_signature)}</a>` : ''}</td>
+      <td><div class="split">${['paid', 'live'].includes(a.status) && !expired(a) ? `<button class="btn sm warn" data-pull="${a.id}">PULL</button>` : ''}${a.status === 'pulled' ? `<button class="btn sm" data-back="${a.id}">REINSTATE</button>` : ''}
+        ${a.payer_token_account && !['refunded', 'pending'].includes(a.status) ? `<button class="btn sm" data-refund="${a.id}">REFUND</button>` : ''}</div></td></tr>`).join('') || '<tr><td colspan="8" class="empty">No bookings yet. Players book from a screen in the game (E near a billboard).</td></tr>'}
+    </tbody></table></div><div id="refundbox"></div>`;
+  const act = (sel, fn) => el.querySelectorAll(sel).forEach((b) => (b.onclick = async () => { try { if (await fn(b) !== false) showAds(); } catch (e) { toast(e.message, true); } }));
   act('[data-check]', async (b) => { const j = await api('ad_check', { id: b.dataset.check }); toast(j.paid ? `Paid: ${j.amount} USDC` : 'No payment found yet', !j.paid); });
-  act('[data-live]', (b) => api('ad_update', { id: b.dataset.live, status: 'live' }));
-  act('[data-end]', (b) => api('ad_update', { id: b.dataset.end, status: 'ended' }));
-  act('[data-cx]', async (b) => { if (confirm('Cancel this booking?')) await api('ad_update', { id: b.dataset.cx, status: 'cancelled' }); });
-  el.querySelectorAll('[data-up]').forEach((inp) => (inp.onchange = async () => {
-    const f = inp.files[0]; if (!f) return;
-    try { const { data, type } = await shrink(f); const j = await api('upload', { name: f.name, type, data }); await api('ad_update', { id: inp.dataset.up, creative_url: j.url }); toast('Creative saved'); showAds(); } catch (e) { toast(e.message, true); }
-  }));
+  act('[data-pull]', async (b) => { const reason = prompt('Pull this ad off the screen now? Reason (shown to the advertiser):', 'Breaks the ad rules'); if (reason === null) return false; await api('ad_pull', { id: b.dataset.pull, reason }); toast('Ad pulled'); });
+  act('[data-back]', async (b) => { await api('ad_reinstate', { id: b.dataset.back }); toast('Ad reinstated'); });
+  act('[data-refund]', async (b) => { await refund(cache.ads.find((x) => x.id === b.dataset.refund)); return false; });
+}
+/** send the USDC back from the treasury wallet to the token account that paid, then confirm it on-chain */
+async function refund(a) {
+  const box = $('#refundbox');
+  const p = await api('refund_prepare', { id: a.id });
+  if (!confirm(`Refund ${p.amount} USDC to ${short(p.to_owner)} for booking ${a.id}? Your wallet will ask you to approve the transfer.`)) return;
+  box.innerHTML = `<div class="banner">Refunding ${p.amount} USDC… approve it in your wallet.</div>`;
+  let sig = null;
+  try {
+    const w = getWallets().get().find((x) => x.features?.['solana:signAndSendTransaction'] && x.features?.['standard:connect']);
+    if (!w) throw new Error('no-sign');
+    const { accounts } = await w.features['standard:connect'].connect(); const acc = accounts.find((x) => x.address === p.from_owner);
+    if (!acc) throw new Error(`Switch your wallet to the treasury account ${short(p.from_owner)}.`);
+    const bytes = await buildRefundTx(p, `BagVerse refund ${a.id}`);
+    const [out] = await w.features['solana:signAndSendTransaction'].signAndSendTransaction({ account: acc, chain: 'solana:mainnet', transaction: bytes });
+    sig = b58(out.signature);
+  } catch (e) {
+    if (e.message !== 'no-sign' && !/reject|cancel|denied/i.test(e.message)) { box.innerHTML = `<div class="banner err">${esc(e.message)}</div>`; return; }
+    if (/reject|cancel|denied/i.test(e.message)) { box.innerHTML = '<div class="banner">Refund cancelled in the wallet.</div>'; return; }
+    // this wallet can't send transactions from the page: pay with Solana Pay and paste the signature
+    box.innerHTML = `<div class="banner">Send <b>${p.amount} USDC</b> to <span class="mono">${esc(p.to_owner)}</span> from the treasury wallet${p.pay_url ? ` (<a href="${esc(p.pay_url)}">open in wallet</a>)` : ''}, then paste the transaction signature:
+      <div class="split" style="margin-top:8px"><input id="rsig" class="mono" placeholder="Transaction signature" style="flex:1"><button class="btn" id="rgo">CONFIRM</button></div></div>`;
+    $('#rgo').onclick = () => { sig = $('#rsig').value.trim(); if (sig) confirmRefund(a, sig); };
+    return;
+  }
+  confirmRefund(a, sig);
+}
+async function confirmRefund(a, sig) {
+  const box = $('#refundbox');
+  for (let k = 0; k < 8; k++) {
+    box.innerHTML = `<div class="banner">Refund sent (<a class="mono" href="https://solscan.io/tx/${esc(sig)}" target="_blank" rel="noopener">${short(sig)}</a>). Confirming on-chain…</div>`;
+    try { const j = await api('refund_done', { id: a.id, signature: sig }); if (j.confirmed) { toast('Refund confirmed'); showAds(); return; } } catch (e) { box.innerHTML = `<div class="banner err">${esc(e.message)}</div>`; return; }
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+  box.innerHTML = `<div class="banner">Not confirmed yet. Check <a href="https://solscan.io/tx/${esc(sig)}" target="_blank" rel="noopener">the transaction</a>, then press REFUND again or paste the signature.</div>`;
 }
 
 if (token) renderShell(); else renderLogin();

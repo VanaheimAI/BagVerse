@@ -11,14 +11,18 @@
 //   players                                             -> everyone with a leaderboard row or wallet, joined up
 //   upload       { name, type, data (base64) }          -> public URL (Supabase Storage bucket "prizes")
 //   ads                                                 -> ad bookings
-//   ad_update    { id, status?, creative_url?, starts_at? }
 //   ad_check     { id }                                  -> look for the payment on-chain
+//   ad_pull      { id, reason }                          -> veto: take the ad off the screen (status 'pulled')
+//   ad_reinstate { id }                                  -> put a pulled ad back (if not refunded)
+//   refund_prepare { id }                               -> what the dashboard needs to build the USDC refund
+//   refund_done  { id, signature }                       -> confirm the refund on-chain (status 'refunded')
 import crypto from 'node:crypto';
 import { admin, hostOf, readBody, send } from './_lib/wallet.js';
 import { checkLogin, checkToken } from './_lib/admin.js';
-import { findPayment } from './_lib/pay.js';
+import { findPayment, checkRefund } from './_lib/pay.js';
+import { rpc } from './_lib/raffle.js';
 import drawHandler from './raffle/draw.js';
-import { TREASURY, USDC_MINT, AD_DAYS } from '../src/treasury.js';
+import { TREASURY, USDC_MINT } from '../src/treasury.js';
 
 const clean = (v, n = 200) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
 const PRIZE_KEYS = ['name', 'set', 'grader', 'grade', 'variant', 'cert', 'mint', 'url', 'image'];
@@ -111,20 +115,46 @@ export default async function handler(req, res, deps = {}) {
         return send(res, 200, { url: st.from('prizes').getPublicUrl(path).data.publicUrl });
       }
       case 'ads': return send(res, 200, { ads: await q(sb.from('ad_bookings').select('*').order('created_at', { ascending: false }).limit(500)), treasury: TREASURY });
-      case 'ad_update': {
-        const up = {};
-        if (['pending', 'paid', 'live', 'ended', 'cancelled'].includes(body.status)) up.status = body.status;
-        if (body.creative_url !== undefined) { const u = clean(body.creative_url, 600); if (u && !/^https:\/\//.test(u)) return send(res, 400, { error: 'Creative link must start with https://' }); up.creative_url = u || null; }
-        if (up.status === 'live') { const now = Date.now(); up.starts_at = new Date(now).toISOString(); up.ends_at = new Date(now + AD_DAYS * 86400e3).toISOString(); }
-        await q(sb.from('ad_bookings').update(up).eq('id', clean(body.id, 64)));
+      case 'ad_pull': {
+        const a = await q(sb.from('ad_bookings').select('status').eq('id', clean(body.id, 64)).maybeSingle()); if (!a) return send(res, 404, { error: 'No such booking.' });
+        if (!['paid', 'live'].includes(a.status)) return send(res, 409, { error: `Can't pull a ${a.status} booking.` });
+        await q(sb.from('ad_bookings').update({ status: 'pulled', pulled_reason: clean(body.reason, 200) || null }).eq('id', clean(body.id, 64)));
         return send(res, 200, { ok: true });
+      }
+      case 'ad_reinstate': {
+        const a = await q(sb.from('ad_bookings').select('*').eq('id', clean(body.id, 64)).maybeSingle()); if (!a) return send(res, 404, { error: 'No such booking.' });
+        if (a.status !== 'pulled') return send(res, 409, { error: 'Only a pulled ad can be reinstated.' });
+        await q(sb.from('ad_bookings').update({ status: a.creative_url ? 'live' : 'paid', pulled_reason: null }).eq('id', a.id));
+        return send(res, 200, { ok: true });
+      }
+      case 'refund_prepare': {
+        const rpcUrl = deps.rpc ?? process.env.SOLANA_RPC_URL; if (!rpcUrl) return send(res, 503, { error: 'Set SOLANA_RPC_URL in Vercel to send refunds.' });
+        const a = await q(sb.from('ad_bookings').select('*').eq('id', clean(body.id, 64)).maybeSingle()); if (!a) return send(res, 404, { error: 'No such booking.' });
+        if (!a.payer_token_account) return send(res, 409, { error: 'No confirmed payment to refund (check the payment first).' });
+        if (a.status === 'refunded') return send(res, 409, { error: 'Already refunded.' });
+        const amount = Number(a.paid_amount || a.amount);
+        const accts = await rpc(rpcUrl, 'getTokenAccountsByOwner', [TREASURY, { mint: USDC_MINT }, { encoding: 'jsonParsed', commitment: 'confirmed' }], deps.fetchFn);
+        const src = (accts?.value || []).map((v) => ({ pubkey: v.pubkey, amt: Number(v.account?.data?.parsed?.info?.tokenAmount?.amount || 0) })).sort((x, y) => y.amt - x.amt)[0];
+        if (!src || src.amt < amount * 1e6) return send(res, 409, { error: `The treasury's USDC balance is too low for a ${amount} USDC refund.` });
+        const bh = await rpc(rpcUrl, 'getLatestBlockhash', [{ commitment: 'confirmed' }], deps.fetchFn);
+        return send(res, 200, { from_owner: TREASURY, from: src.pubkey, to: a.payer_token_account, to_owner: a.payer_address, mint: USDC_MINT, decimals: 6, amount, blockhash: bh.value.blockhash,
+          pay_url: a.payer_address ? `solana:${a.payer_address}?amount=${amount}&spl-token=${USDC_MINT}&label=${encodeURIComponent('BagVerse refund')}&memo=refund-${a.id}` : null });
+      }
+      case 'refund_done': {
+        const rpcUrl = deps.rpc ?? process.env.SOLANA_RPC_URL; if (!rpcUrl) return send(res, 503, { error: 'Set SOLANA_RPC_URL in Vercel.' });
+        const a = await q(sb.from('ad_bookings').select('*').eq('id', clean(body.id, 64)).maybeSingle()); if (!a) return send(res, 404, { error: 'No such booking.' });
+        const sig = clean(body.signature, 120);
+        const ok = await checkRefund(rpcUrl, { signature: sig, to: a.payer_token_account, mint: USDC_MINT, amount: Number(a.paid_amount || a.amount) }, deps.fetchFn).catch(() => false);
+        if (!ok) return send(res, 202, { confirmed: false, note: 'Not confirmed yet. Wait a few seconds and press Confirm again.' });
+        await q(sb.from('ad_bookings').update({ status: 'refunded', refund_signature: sig }).eq('id', a.id));
+        return send(res, 200, { confirmed: true });
       }
       case 'ad_check': {
         const rpcUrl = deps.rpc ?? process.env.SOLANA_RPC_URL; if (!rpcUrl) return send(res, 503, { error: 'Set SOLANA_RPC_URL in Vercel to check payments.' });
         const a = await q(sb.from('ad_bookings').select('*').eq('id', clean(body.id, 64)).maybeSingle()); if (!a) return send(res, 404, { error: 'No such booking.' });
         const pay = await findPayment(rpcUrl, { reference: a.reference, treasury: TREASURY, mint: USDC_MINT, amount: Number(a.amount) }, deps.fetchFn);
         if (!pay) return send(res, 200, { paid: false });
-        await q(sb.from('ad_bookings').update({ status: a.status === 'pending' ? 'paid' : a.status, signature: pay.signature, paid_amount: pay.amount }).eq('id', a.id));
+        await q(sb.from('ad_bookings').update({ status: a.status === 'pending' ? 'paid' : a.status, signature: pay.signature, paid_amount: pay.amount, payer_address: pay.payer, payer_token_account: pay.from }).eq('id', a.id));
         return send(res, 200, { paid: true, ...pay });
       }
       default: return send(res, 400, { error: 'Unknown op.' });

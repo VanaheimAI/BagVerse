@@ -56,14 +56,37 @@ ok(s === 200 && j.players.length === 3 && ada.level === 31 && ada.wallet === 'AD
 // ads
 [s, j] = await call(adsApi, 'book', { slot: 'BB_07', tier: 'totem', name: 'Ada' }, {}, { sb });
 const ad = j; ok(s === 200 && ad.amount === 120 && ad.url.startsWith(`solana:${TREASURY}?amount=120&spl-token=${USDC_MINT}&reference=${ad.reference}`), 'booking returns a Solana Pay link to the treasury: ' + ad.url.slice(0, 60) + '…');
-const chain = (paid) => async (_u, { body }) => { const { method } = JSON.parse(body); let result;
+const PAYER = 'Payer1111111111111111111111111111111111111', PAYER_ATA = 'PayerAta11111111111111111111111111111111111', T_ATA = 'TreasAta1111111111111111111111111111111111';
+const chain = (paid) => async (_u, { body }) => { const { method, params } = JSON.parse(body); let result;
   if (method === 'getSignaturesForAddress') result = paid ? [{ signature: 'SIG1', err: null }] : [];
-  if (method === 'getTransaction') result = { slot: 9, blockTime: 1, meta: { err: null, preTokenBalances: [{ owner: TREASURY, mint: USDC_MINT, uiTokenAmount: { amount: '5000000' } }], postTokenBalances: [{ owner: TREASURY, mint: USDC_MINT, uiTokenAmount: { amount: String(5e6 + paid * 1e6) } }] } };
+  if (method === 'getTransaction' && params[0] === 'SIG1') result = { slot: 9, blockTime: 1, transaction: { message: { accountKeys: [{ pubkey: PAYER }, { pubkey: PAYER_ATA }, { pubkey: T_ATA }] } }, meta: { err: null,
+    preTokenBalances: [{ accountIndex: 2, owner: TREASURY, mint: USDC_MINT, uiTokenAmount: { amount: '5000000' } }, { accountIndex: 1, owner: PAYER, mint: USDC_MINT, uiTokenAmount: { amount: '900000000' } }],
+    postTokenBalances: [{ accountIndex: 2, owner: TREASURY, mint: USDC_MINT, uiTokenAmount: { amount: String(5e6 + paid * 1e6) } }, { accountIndex: 1, owner: PAYER, mint: USDC_MINT, uiTokenAmount: { amount: String(900e6 - paid * 1e6) } }] } };
+  if (method === 'getTransaction' && params[0] === 'REFUND1') result = { slot: 10, transaction: { message: { accountKeys: [{ pubkey: TREASURY }, { pubkey: T_ATA }, { pubkey: PAYER_ATA }] } }, meta: { err: null,
+    preTokenBalances: [{ accountIndex: 2, owner: PAYER, mint: USDC_MINT, uiTokenAmount: { amount: '780000000' } }], postTokenBalances: [{ accountIndex: 2, owner: PAYER, mint: USDC_MINT, uiTokenAmount: { amount: '900000000' } }] } };
+  if (method === 'getTokenAccountsByOwner') result = { value: [{ pubkey: T_ATA, account: { data: { parsed: { info: { tokenAmount: { amount: '500000000' } } } } } }] };
+  if (method === 'getLatestBlockhash') result = { value: { blockhash: 'BH111' } };
   return { json: async () => ({ result }) }; };
+const img = Buffer.from('fakeimage').toString('base64');
+[s, j] = await call(adsApi, 'creative', { id: ad.id, key: ad.key, type: 'image/webp', data: img }, {}, { sb }); ok(s === 409, 'no upload before paying: ' + j.error);
 [s, j] = await call(adsApi, 'check', { id: ad.id }, {}, { sb, rpc: 'x', fetchFn: chain(0) }); ok(j.paid === false, 'no payment yet');
 [s, j] = await call(adsApi, 'check', { id: ad.id }, {}, { sb, rpc: 'x', fetchFn: chain(100) }); ok(j.paid === false, 'underpaid (100 of 120) does not count');
-[s, j] = await call(adsApi, 'check', { id: ad.id }, {}, { sb, rpc: 'x', fetchFn: chain(120) }); ok(j.paid === true && sb.db.ad_bookings[0].status === 'paid' && sb.db.ad_bookings[0].signature === 'SIG1', 'paid in full: booking marked paid');
-[s, j] = await call(adminApi, 'ad_update', { id: ad.id, creative_url: 'https://img.example/ad.webp' }, { tok }, { sb });
-[s, j] = await call(adminApi, 'ad_update', { id: ad.id, status: 'live' }, { tok }, { sb });
-ok(sb.db.ad_bookings[0].status === 'live' && Date.parse(sb.db.ad_bookings[0].ends_at) - Date.now() > 6.9 * 86400e3, 'admin puts it live for 7 days');
-[s, j] = await call(adsApi, 'live', null, { method: 'GET' }, { sb }); ok(j.live.length === 1 && j.live[0].slot === 'BB_07', 'the game sees the live ad');
+[s, j] = await call(adsApi, 'check', { id: ad.id }, {}, { sb, rpc: 'x', fetchFn: chain(120) });
+const AD = sb.db.ad_bookings[0]; ok(j.paid === true && AD.status === 'paid' && AD.payer_address === PAYER && AD.payer_token_account === PAYER_ATA, 'paid in full: payer wallet and USDC account recorded');
+[s, j] = await call(adsApi, 'book', { slot: 'BB_07', tier: 'totem' }, {}, { sb }); ok(s === 409, 'screen taken once paid: ' + j.error);
+[s, j] = await call(adsApi, 'creative', { id: ad.id, key: 'wrong', type: 'image/webp', data: img }, {}, { sb }); ok(s === 404, 'another device (wrong key) cannot upload');
+[s, j] = await call(adsApi, 'creative', { id: ad.id, key: ad.key, type: 'image/webp', data: img }, {}, { sb });
+ok(s === 200 && AD.status === 'live' && /\/prizes\/|\/ads\//.test(AD.creative_url) && Date.parse(AD.ends_at) - Date.now() > 6.9 * 86400e3, 'the payer uploads their image: live for 7 days');
+const ends = AD.ends_at; await new Promise((r) => setTimeout(r, 5));
+[s, j] = await call(adsApi, 'creative', { id: ad.id, key: ad.key, type: 'image/png', data: img }, {}, { sb }); ok(s === 200 && AD.ends_at === ends, 'replacing the image keeps the end date');
+[s, j] = await call(adsApi, 'live', null, { method: 'GET' }, { sb }); ok(j.live.length === 1 && j.live[0].slot === 'BB_07' && j.live[0].id === ad.id, 'the game sees the live ad');
+[s, j] = await call(adminApi, 'ad_pull', { id: ad.id, reason: 'Off-brand' }, { tok }, { sb }); ok(AD.status === 'pulled' && AD.pulled_reason === 'Off-brand', 'admin pulls the ad (veto)');
+[s, j] = await call(adsApi, 'live', null, { method: 'GET' }, { sb }); ok(j.live.length === 0, 'pulled ad is off the screens');
+[s, j] = await call(adsApi, 'status', { id: ad.id, key: ad.key }, {}, { sb }); ok(j.status === 'pulled' && j.pulled_reason === 'Off-brand', 'the advertiser sees it was pulled and why');
+[s, j] = await call(adminApi, 'ad_reinstate', { id: ad.id }, { tok }, { sb }); ok(AD.status === 'live', 'reinstated');
+[s, j] = await call(adminApi, 'ad_pull', { id: ad.id, reason: 'Refund requested' }, { tok }, { sb });
+[s, j] = await call(adminApi, 'refund_prepare', { id: ad.id }, { tok }, { sb, rpc: 'x', fetchFn: chain(120) });
+ok(s === 200 && j.from === T_ATA && j.to === PAYER_ATA && j.to_owner === PAYER && j.amount === 120 && j.blockhash === 'BH111', 'refund prepared: treasury USDC account -> the account that paid, 120 USDC');
+[s, j] = await call(adminApi, 'refund_done', { id: ad.id, signature: 'SIG1' }, { tok }, { sb, rpc: 'x', fetchFn: chain(120) }); ok(s === 202 && AD.status === 'pulled', 'a transaction that is not a refund to the payer is not accepted');
+[s, j] = await call(adminApi, 'refund_done', { id: ad.id, signature: 'REFUND1' }, { tok }, { sb, rpc: 'x', fetchFn: chain(120) }); ok(j.confirmed && AD.status === 'refunded' && AD.refund_signature === 'REFUND1', 'refund confirmed on-chain: booking refunded');
+[s, j] = await call(adminApi, 'refund_prepare', { id: ad.id }, { tok }, { sb, rpc: 'x', fetchFn: chain(120) }); ok(s === 409, 'cannot refund twice');

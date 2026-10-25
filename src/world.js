@@ -121,6 +121,12 @@ export class World {
     });
   }
 
+  /** back to the house creatives (ad ended or pulled) */
+  clearCreative(slot) {
+    const bb = this.billboards.find((b) => b.userData.slot === slot); if (!bb || !bb.userData.creativeUrl) return;
+    const u = bb.userData; u.texs[0]?.dispose(); u.texs = u.house || u.texs; u.idx = 0; bb.material.map = u.texs[0]; u.creativeUrl = null; u.open = true;
+  }
+
   setupTickers() {
     for (const t of this.tickers) {
       const tex = tickerTexture(parseInt(t.name.split('_')[1], 10));

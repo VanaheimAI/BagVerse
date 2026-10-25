@@ -825,45 +825,84 @@ function mapMarks() {
 }
 
 // ---------------------------------------------------------------- billboard rentals (Solana Pay, USDC to the treasury)
-const liveAds = new Map();   // slot -> { creative_url, ends_at }
+// Rent a screen: pay with Solana Pay -> upload your own image -> it's live for AD_DAYS days. The admin can pull any
+// ad (and refund it) from /admin. The booking's secret key stays in this browser (localStorage) so only it can
+// upload or replace the image.
+const liveAds = new Map();   // slot number -> { id, creative_url, ends_at }
+const slotNum = (s) => +String(s).replace(/\D/g, '') || s;
+const myAds = { get() { try { return JSON.parse(localStorage.getItem('bv_ads') || '[]'); } catch (_) { return []; } },
+  add(b) { try { localStorage.setItem('bv_ads', JSON.stringify([...this.get().filter((x) => x.id !== b.id), b].slice(-20))); } catch (_) {} },
+  forSlot(slot) { return this.get().filter((x) => slotNum(x.slot) === slot).pop() || null; } };
 async function loadLiveAds() {
   try {
     const r = await fetch('/api/ads?op=live'); if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) return;
-    const { live } = await r.json(); liveAds.clear();
-    for (const a of live || []) { liveAds.set(+a.slot.replace(/\D/g, '') || a.slot, a); world.setCreative?.(+a.slot.replace(/\D/g, '') || a.slot, a.creative_url); }
+    const { live } = await r.json(); const was = new Set(liveAds.keys()); liveAds.clear();
+    for (const a of live || []) { const n = slotNum(a.slot); liveAds.set(n, a); was.delete(n); world.setCreative?.(n, a.creative_url); }
+    for (const n of was) world.clearCreative?.(n);   // ended or pulled: back to the house creatives
   } catch (_) {}
 }
-loadLiveAds(); setInterval(loadLiveAds, 5 * 60e3);
-function openAdSlot(bb, price, live) {
-  const u = bb.userData, slot = bb.name, label = `SCREEN ${bb.name.replace('_', ' #')}`;
+loadLiveAds(); setInterval(loadLiveAds, 2 * 60e3);
+const adPost = async (op, body, auth = false) => {
+  const ses = auth ? await session().catch(() => null) : null;
+  const r = await fetch('/api/ads?op=' + op, { method: 'POST', headers: { 'content-type': 'application/json', ...(ses ? { authorization: 'Bearer ' + ses.token } : {}) }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Ad bookings are not available right now.'); return j;
+};
+function shrinkImage(file, max = 1600) {
+  return new Promise((res, rej) => { const img = new Image(); img.onerror = () => rej(new Error('That file is not an image.'));
+    img.onload = () => { const k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); res({ type: 'image/webp', data: c.toDataURL('image/webp', 0.9).split(',')[1], w: img.width, h: img.height }); URL.revokeObjectURL(img.src); };
+    img.src = URL.createObjectURL(file); });
+}
+async function openAdSlot(bb, price, live) {
+  const u = bb.userData, label = `SCREEN ${bb.name.replace('_', ' #')}`, mine = myAds.forSlot(u.slot);
+  let st = null; if (mine) st = await adPost('status', { id: mine.id, key: mine.key }).catch(() => null);
+  if (live && st && st.id === live.id && st.status !== 'live') { live = null; liveAds.delete(u.slot); world.clearCreative?.(u.slot); }   // pulled / refunded since the last poll
+  const ownLive = st && st.status === 'live' && live && live.id === st.id;
+  const until = (iso) => new Date(iso).toUTCString().slice(5, 16).toUpperCase();
   hud.modal(label, `
     <div class="row"><span>Tier</span><b>${u.tier.toUpperCase()}</b></div>
-    <div class="row"><span>Format</span><b>${u.aspect || '16:9'} · image</b></div>
+    <div class="row"><span>Format</span><b>${u.aspect || '16:9'} image · JPG / PNG / WebP</b></div>
     <div class="row"><span>Price</span><b>${price} USDC · ${AD_DAYS} days</b></div>
-    <div class="row"><span>Status</span><b style="color:${live ? '#ffc83d' : '#7cff3d'}">${live ? `RENTED UNTIL ${new Date(live.ends_at).toUTCString().slice(5, 16).toUpperCase()}` : 'AVAILABLE'}</b></div>
-    ${live ? '' : `<p style="opacity:.8">Pay with any Solana wallet (Solana Pay, USDC). Payment goes to the BagVerse treasury <span class="wl-addr">${shortAddr(TREASURY)}</span>. After it confirms, the team puts your image on this screen for ${AD_DAYS} days.</p>
-    <div id="adpay"><button id="adbook">RENT · PAY ${price} USDC</button></div><p class="wl-err" id="aderr" hidden></p>`}`);
-  const err = (m) => { const e = $('aderr'); if (e) { e.textContent = m; e.hidden = !m; } };
-  const btn = $('adbook'); if (!btn) return;
-  btn.onclick = async () => {
-    btn.disabled = true; btn.textContent = 'PREPARING…'; err('');
-    try {
-      const ses = await session().catch(() => null);
-      const r = await fetch('/api/ads?op=book', { method: 'POST', headers: { 'content-type': 'application/json', ...(ses ? { authorization: 'Bearer ' + ses.token } : {}) }, body: JSON.stringify({ slot, tier: u.tier, name: progress.s.name }) });
-      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Bookings are not available right now.');
-      const qr = await QRCode.toDataURL(j.url, { margin: 1, width: 320, color: { dark: '#0b0618', light: '#ffffff' } });
-      $('adpay').innerHTML = `<div class="adqr"><img src="${qr}" alt="Solana Pay QR code"><div>
-        <p><b>Scan with your wallet app</b>, or open it in a wallet on this device.</p>
-        <div class="row"><span>Amount</span><b>${j.amount} USDC</b></div><div class="row"><span>Booking</span><b class="wl-addr">${j.id}</b></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><a class="wl-btn" href="${j.url}">OPEN IN WALLET</a><button id="adcheck">I'VE PAID · CHECK</button></div></div></div>`;
+    <div class="row"><span>Status</span><b style="color:${live ? '#ffc83d' : '#7cff3d'}">${ownLive ? `YOUR AD · LIVE UNTIL ${until(st.ends_at)}` : live ? `RENTED UNTIL ${until(live.ends_at)}` : st?.status === 'paid' ? 'PAID · WAITING FOR YOUR IMAGE' : 'AVAILABLE'}</b></div>
+    ${st?.status === 'pulled' ? `<p class="wl-err">Your ad on this screen was removed by BagVerse${st.pulled_reason ? `: ${escR(st.pulled_reason)}` : ''}. Contact the team about a refund.</p>` : ''}
+    ${st?.status === 'refunded' ? '<p style="opacity:.8">Your booking for this screen was refunded.</p>' : ''}
+    <div id="adpay"></div><p class="wl-err" id="aderr" hidden></p>`);
+  const err = (m) => { const e = $('aderr'); if (e) { e.textContent = m || ''; e.hidden = !m; } };
+  const box = () => $('adpay');
+  const uploadUi = (b, replacing) => {
+    box().innerHTML = `<p style="opacity:.85">${replacing ? 'Replace the image on your screen.' : 'Payment received ✓ Now upload your ad: it goes live straight away for ' + AD_DAYS + ' days.'} Use a ${u.aspect === '9:16' ? 'tall 9:16' : 'wide 16:9'} image. BagVerse can remove ads that break the rules.</p>
+      <label class="wl-btn" style="cursor:pointer">${replacing ? 'CHOOSE NEW IMAGE' : 'UPLOAD YOUR IMAGE'}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden id="adfile"></label>`;
+    $('adfile').onchange = async (e) => {
+      const f = e.target.files[0]; if (!f) return; err('');
+      box().innerHTML = '<p style="opacity:.8">Uploading…</p>';
+      try { const img = await shrinkImage(f); const j = await adPost('creative', { id: b.id, key: b.key, type: img.type, data: img.data });
+        world.setCreative?.(u.slot, j.creative_url); liveAds.set(u.slot, { id: b.id, creative_url: j.creative_url, ends_at: j.ends_at }); sfx.play('achieve');
+        box().innerHTML = `<p style="color:#7cff3d;font-weight:700">YOUR AD IS LIVE ✓ on ${label} until ${until(j.ends_at)}.</p>`; hud.toast('YOUR AD IS LIVE'); }
+      catch (x) { err(x.message); uploadUi(b, replacing); }
+    };
+  };
+  const payUi = (b) => {
+    QRCode.toDataURL(b.url, { margin: 1, width: 320, color: { dark: '#0b0618', light: '#ffffff' } }).then((qr) => {
+      box().innerHTML = `<div class="adqr"><img src="${qr}" alt="Solana Pay QR code"><div>
+        <p><b>Scan with your wallet app</b>, or open it in a wallet on this device. ${b.amount} USDC goes to the BagVerse treasury <span class="wl-addr">${shortAddr(TREASURY)}</span>.</p>
+        <div class="row"><span>Booking</span><b class="wl-addr">${b.id}</b></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><a class="wl-btn" href="${b.url}">OPEN IN WALLET</a><button id="adcheck">I'VE PAID · CHECK</button></div></div></div>`;
       $('adcheck').onclick = async () => {
         const c = $('adcheck'); c.disabled = true; c.textContent = 'CHECKING…'; err('');
-        try { const q = await fetch('/api/ads?op=check', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: j.id }) }); const k = await q.json();
-          if (k.paid) { sfx.play('achieve'); $('adpay').innerHTML = `<p style="color:#7cff3d;font-weight:700">PAYMENT RECEIVED ✓ Booking ${j.id}. The team will put your ad live on this screen shortly.</p>`; hud.toast('AD SCREEN BOOKED'); }
-          else { c.disabled = false; c.textContent = "I'VE PAID · CHECK"; err(k.error || 'Payment not found yet. It can take a few seconds after you approve it.'); } }
-        catch (_) { c.disabled = false; c.textContent = "I'VE PAID · CHECK"; err('Network error. Try again.'); }
+        try { const k = await adPost('check', { id: b.id }); if (k.paid) { sfx.play('success'); uploadUi(b, false); } else { c.disabled = false; c.textContent = "I'VE PAID · CHECK"; err('Payment not found yet. It can take a few seconds after you approve it.'); } }
+        catch (x) { c.disabled = false; c.textContent = "I'VE PAID · CHECK"; err(x.message); }
       };
-    } catch (e) { btn.disabled = false; btn.textContent = `RENT · PAY ${price} USDC`; err(e.message); }
+    });
+  };
+  if (ownLive) { uploadUi(mine, true); return; }
+  if (st?.status === 'paid') { uploadUi(mine, false); return; }
+  if (st?.status === 'pending' && mine.url) { payUi(mine); return; }
+  if (live) return;
+  box().innerHTML = `<p style="opacity:.8">Pay with any Solana wallet (Solana Pay, USDC), then upload your own image. It shows on this screen for ${AD_DAYS} days.</p><button id="adbook">RENT · PAY ${price} USDC</button>`;
+  $('adbook').onclick = async () => {
+    const btn = $('adbook'); btn.disabled = true; btn.textContent = 'PREPARING…'; err('');
+    try { const j = await adPost('book', { slot: bb.name, tier: u.tier, name: progress.s.name }, true); const b = { id: j.id, key: j.key, slot: bb.name, url: j.url, amount: j.amount }; myAds.add(b); payUi(b); }
+    catch (x) { btn.disabled = false; btn.textContent = `RENT · PAY ${price} USDC`; err(x.message); }
   };
 }
 
@@ -1006,8 +1045,8 @@ function interactions(dt) {
       }
     } else { watchT = Math.max(0, watchT - dt * 2); if (!watchT) hud.watch(null); else hud.watch(watchT / 10); }
     if (!promptHtml && bestD < 10 && u.tier !== 'hero') {
-      const live = liveAds.get(u.slot), price = adPrice(u.tier);
-      promptHtml = live ? '<kbd>E</kbd> AD SLOT · RENTED' : u.open ? `<kbd>E</kbd> RENT THIS SCREEN · ${price} USDC / ${AD_DAYS} DAYS` : '<kbd>E</kbd> VIEW AD SLOT';
+      const live = liveAds.get(u.slot), price = adPrice(u.tier), mineHere = myAds.forSlot(u.slot);
+      promptHtml = live ? (mineHere && mineHere.id === live.id ? '<kbd>E</kbd> YOUR AD · REPLACE IMAGE' : '<kbd>E</kbd> AD SLOT · RENTED') : mineHere ? '<kbd>E</kbd> YOUR BOOKING' : `<kbd>E</kbd> RENT THIS SCREEN · ${price} USDC / ${AD_DAYS} DAYS`;
       action = () => openAdSlot(bestBB, price, live);
     }
   }
@@ -1128,7 +1167,7 @@ const syncHolder = () => {
 wallet.onChange(syncHolder); syncHolder();
 const openSkins = () => { if (skins.isOpen) return; sfx.play('whoosh'); fx.through(() => { $('loader').hidden = true; $('hud').hidden = true; $('emotewheel').hidden = true; hud.closeModal(); skins.openNow('skins'); }, 220, 450); };
 if (params.has('autostart')) start(); else openSkins();
-window.__bagverse = { fx, openCollection, raffles, openVault, tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
+window.__bagverse = { openAdSlot, liveAds, fx, openCollection, raffles, openVault, tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
 
 // slow-frame guard: after a short warm-up, a few seconds under ~22 fps sheds the heaviest effects live
 // and remembers the lower tier for next time

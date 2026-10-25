@@ -92,16 +92,29 @@ create table if not exists public.ad_bookings (
   amount        numeric not null,
   currency      text not null default 'USDC',
   reference     text not null unique,              -- Solana Pay reference key (finds the payment on-chain)
-  status        text not null default 'pending' check (status in ('pending', 'paid', 'live', 'ended', 'cancelled')),
+  status        text not null default 'pending',   -- pending -> paid -> live (payer uploads) | pulled (admin veto) | refunded | ended | cancelled
+  key_hash      text,                              -- sha256 of the secret the booking browser holds (lets it upload the creative)
   payer_user    text,
   payer_name    text,
+  payer_address text,                              -- wallet that paid (from the payment transaction)
+  payer_token_account text,                        -- its USDC account: refunds go back here
   signature     text,
   paid_amount   numeric,
   creative_url  text,
+  pulled_reason text,
+  refund_signature text,
   starts_at     timestamptz,
   ends_at       timestamptz,
   created_at    timestamptz not null default now()
 );
+-- (safe to run again on an older version of these tables)
+alter table public.ad_bookings add column if not exists key_hash text;
+alter table public.ad_bookings add column if not exists payer_address text;
+alter table public.ad_bookings add column if not exists payer_token_account text;
+alter table public.ad_bookings add column if not exists pulled_reason text;
+alter table public.ad_bookings add column if not exists refund_signature text;
+alter table public.ad_bookings drop constraint if exists ad_bookings_status_check;
+alter table public.ad_bookings add constraint ad_bookings_status_check check (status in ('pending', 'paid', 'live', 'pulled', 'refunded', 'ended', 'cancelled'));
 alter table public.raffles enable row level security;
 alter table public.raffle_entries enable row level security;
 alter table public.ad_bookings enable row level security;
