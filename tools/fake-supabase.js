@@ -30,7 +30,7 @@ export function createClient() {
   // server-side tables (wallets, raffles, raffle_entries) live on the test server (tools/wallet_server.mjs), like the
   // real tables the API writes
   const xhr = (method, url, body) => { const x = new XMLHttpRequest(); x.open(method, url, false); x.send(body ? JSON.stringify(body) : null); try { return JSON.parse(x.responseText); } catch (_) { return []; } };
-  const SERVER = new Set(['wallets', 'raffles', 'raffle_entries']);
+  const SERVER = new Set(['wallets', 'raffles', 'raffle_entries', 'linked_wallets']);
   function from(name) {
     if (SERVER.has(name)) {
       const eqs = []; let del = false, ord = null, lim = 1000;

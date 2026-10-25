@@ -3,7 +3,8 @@
 // Each gate needs ONE of:
 //   collection: '<collection address>'      Metaplex certified collection (most NFT collections; check it on Magic Eden / Tensor / Solscan)
 //   creator:    '<verified creator address>' older collections with no certified collection
-//   mint: '<token mint>', min: <amount>     a fungible token balance (e.g. hold 10,000 $BAG once the token exists)
+//   mint: '<token mint>', min: <amount>     a fungible token balance (e.g. hold 10,000 $VERSE once the token exists)
+//   chain: 'polygon', contract: '0x…'       an NFT from a Polygon contract (e.g. any Courtyard slab), held by the player's linked Polygon wallet
 // label: what the locked card says. A skin listed here is locked for everyone without the holding.
 export const NFT_GATES = [
   // { skin: 'kaizokuguy', collection: 'ABC...xyz', label: 'Hold a Kaizoku NFT' },
@@ -17,6 +18,8 @@ export function skinsFromAssets(items, gates = NFT_GATES) {
   const out = new Set();
   for (const g of gates) {
     const hit = items.some((a) => {
+      if (g.chain === 'polygon') return a.chain === 'polygon' && String(a.contract || '').toLowerCase() === String(g.contract || '').toLowerCase();
+      if (a.chain === 'polygon') return false;
       if (g.collection) return (a.grouping || []).some((x) => x.group_key === 'collection' && x.group_value === g.collection);
       if (g.creator) return (a.creators || []).some((c) => c.verified && c.address === g.creator);
       if (g.mint) { if (a.id !== g.mint) return false; const t = a.token_info || {}; const amt = Number(t.balance || 0) / 10 ** (t.decimals || 0); return amt >= (g.min ?? 1); }

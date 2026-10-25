@@ -3,8 +3,8 @@
 //    "Legend levels". Fast onboarding (Lv 10 in the first session), a predictable plateau, prestige at the top.
 //  - XP comes from capped sources (proof-of-play with diminishing returns, quests, social, exploration, ads...),
 //    rested XP for returning players, streaks with freezes, a 7-day login calendar.
-//  - XP and level are soulbound and can't be bought: $BAG holders get at most +15% on proof-of-play only, and XP no
-//    longer mints $BAG.
+//  - XP and level are soulbound and can't be bought: $VERSE holders get at most +15% on proof-of-play only, and XP no
+//    longer mints $VERSE.
 // Everything is local for now (localStorage); the game server becomes the authority later (same shapes).
 
 export const LEVEL_CAP = 250;

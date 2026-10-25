@@ -7,3 +7,7 @@ export const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';   // US
 export const AD_DAYS = 7;
 const AD_PRICES = { canyon: 250, gantry: 250, totem: 120, tower: 400, spire: 300, podium: 300 };   // USDC per 7 days, by screen tier
 export const adPrice = (tier) => AD_PRICES[tier] ?? 250;
+
+// The BagVerse token ($VERSE, formerly $BAG) lives on Solana. `mint` is filled in once the token exists; until then
+// balances in the HUD are the in-game counter and nothing reads the chain.
+export const VERSE = { symbol: 'VERSE', chain: 'solana', mint: null, decimals: 6 };

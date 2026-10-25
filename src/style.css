@@ -243,7 +243,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07040f; col
 
 /* ===================== touch HUD =====================
    Every control has its own slot, so nothing overlaps at any phone size. Portrait: stats top-left, minimap and
-   $BAG top-right with a column of round menu buttons under it; joystick bottom-left with the chat feed above it;
+   $VERSE top-right with a column of round menu buttons under it; joystick bottom-left with the chat feed above it;
    jump / use / emote bottom-right. Landscape phones: the menu buttons become a row beside the minimap and
    everything shrinks to fit the short screen. Notches, the home bar and the host viewer's corner buttons
    (.embedded) are kept clear. */
@@ -273,14 +273,14 @@ body.touch #tier { align-self: flex-start; gap: 6px; padding: 3px 10px 3px 8px; 
 body.touch #tier .gem { font-size: 15px; }
 body.touch #tier b { font-size: 13px; letter-spacing: 1.5px; }
 
-/* minimap, $BAG and the settings popover: every piece placed on its own */
+/* minimap, $VERSE and the settings popover: every piece placed on its own */
 body.touch #topright { display: contents; }
 body.touch #minimap { position: absolute; top: var(--t); right: var(--r); width: var(--mm); height: var(--mm); }
 body.touch #balance { position: absolute; top: calc(var(--t) + var(--mm) + var(--gap)); right: var(--r); padding: 3px 10px; font-size: 13px; border-radius: 999px; white-space: nowrap; }
 body.touch #lookbtn, body.touch #gfxbtn { display: none; position: absolute; z-index: 2; min-width: 128px; padding: 10px 14px; font-size: 14px; text-align: left; }
 body.touch #hud.menu-open #lookbtn, body.touch #hud.menu-open #gfxbtn { display: block; }
 
-/* round menu buttons: a column under $BAG */
+/* round menu buttons: a column under $VERSE */
 body.touch #actions { display: contents; }
 body.touch #actions [data-act=skins] { --i: 0; } body.touch #actions [data-act=inventory] { --i: 1; }
 body.touch #actions [data-act=map] { --i: 2; } body.touch #actions [data-act=chat] { --i: 3; } body.touch #actions [data-act=menu] { --i: 4; }

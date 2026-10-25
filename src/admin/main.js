@@ -8,6 +8,7 @@ import './admin.css';
 import { getWallets } from '@wallet-standard/app';
 import { ADMIN_WALLET, TREASURY } from '../treasury.js';
 import { buildRefundTx } from './refund-tx.js';
+import { ISSUERS } from '../chains.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -98,7 +99,7 @@ function listRaffles() {
   if (!cache.raffles.length) { el.innerHTML = '<p class="empty">No raffles yet. Create the first one on the right.</p>'; return; }
   el.innerHTML = cache.raffles.map((r) => { const p = r.prize || {};
     return `<div class="rf">${p.image ? `<img src="${esc(p.image)}" alt="">` : '<div class="ph">?</div>'}
-      <div><div><span class="vt ${r.vault}">${r.vault.toUpperCase()}</span> <span class="st ${r.status}">${r.status.toUpperCase()}</span></div>
+      <div><div><span class="vt ${r.vault}">${r.vault.toUpperCase()}</span> <span class="st ${r.status}">${r.status.toUpperCase()}</span>${p.chain === 'polygon' ? ' <span class="st paid">COURTYARD · POLYGON</span>' : p.mint ? ' <span class="st ended">COLLECTOR CRYPT · SOLANA</span>' : ''}</div>
         <div class="t">${esc(p.name)}${p.grade ? ` · ${esc(p.grader || '')} ${esc(p.grade)}` : ''}</div>
         <div class="m">Draw ${fmt(r.draws_at)} <span class="mono">(${utc(r.draws_at)})</span> · ${r.entries | 0} entries · LV ${r.min_level}+</div>
         ${r.winner_name ? `<div class="m">Winner: <b style="color:var(--gold)">${esc(r.winner_name)}</b> · <span class="mono">${short(r.winner_address)}</span> · ${esc(r.proof?.method || '')}</div>` : ''}</div>
@@ -123,14 +124,20 @@ function form() {
     <label class="f"><span>SET / NUMBER</span><input id="fs" placeholder="e.g. One Piece OP13 · Carrying on His Will #118"></label>
     <div class="row3"><label class="f"><span>GRADER</span><select id="fg">${['PSA', 'CGC', 'BGS', 'TAG', 'SGC', ''].map((g) => `<option value="${g}">${g || 'Ungraded'}</option>`).join('')}</select></label>
       <label class="f"><span>GRADE</span><input id="fgr" placeholder="10"></label><label class="f"><span>VARIANT</span><input id="fva" placeholder="Alternate Art"></label></div>
-    <div class="row2"><label class="f"><span>CERT #</span><input id="fc"></label><label class="f"><span>MINT (TOKENIZED CARD)</span><input id="fm" class="mono" placeholder="Solana mint address"></label></div>
-    <label class="f"><span>CARD LINK</span><input id="fu" placeholder="https://collectorcrypt.com/assets/solana/…"></label>
+    <label class="f"><span>WHERE THE SLAB LIVES</span><select id="fch"><option value="solana">Collector Crypt · Solana</option><option value="polygon">Courtyard · Polygon</option><option value="none">Not tokenized / other</option></select></label>
+    <div class="row2" id="fsol"><label class="f"><span>CERT #</span><input id="fc"></label><label class="f"><span>MINT (SOLANA)</span><input id="fm" class="mono" placeholder="Solana mint address"></label></div>
+    <div id="fpoly" hidden><div class="row2"><label class="f"><span>CERT #</span><input id="fc2"></label><label class="f"><span>TOKEN ID (POLYGON)</span><input id="ft" class="mono" placeholder="e.g. 58251309559212678585…"></label></div>
+      <label class="f"><span>CONTRACT (POLYGON)</span><input id="fct" class="mono"></label><p class="hint">Only the winner is asked to link a Polygon wallet, to receive the slab.</p></div>
+    <label class="f"><span>CARD LINK</span><input id="fu" placeholder="https://collectorcrypt.com/… or https://courtyard.io/…"></label>
     <label class="f"><span>IMAGE</span><div class="split"><input id="fi" placeholder="https://… or upload" style="flex:1"><label class="btn sm" style="margin:0">UPLOAD<input id="ff" type="file" accept="image/*" hidden></label></div>
       <div class="preview" id="fp"></div></label>
     <label class="f"><span>DRAW TIME (YOUR LOCAL TIME)</span><input id="fd" type="datetime-local"><span class="hint" id="fdu"></span></label>
     <div class="split" style="margin-top:12px"><button class="btn go" id="fsave">${r ? 'SAVE CHANGES' : 'CREATE RAFFLE'}</button>${r ? '<button class="btn" id="fclear">NEW INSTEAD</button>' : ''}<span id="fmsg"></span></div>`;
   $('#fv').value = r?.vault || 'wano'; $('#fl').value = r ? r.min_level : 25; $('#fn').value = p.name || ''; $('#fs').value = p.set || ''; $('#fg').value = p.grader ?? 'PSA';
-  $('#fgr').value = p.grade || ''; $('#fva').value = p.variant || ''; $('#fc').value = p.cert || ''; $('#fm').value = p.mint || ''; $('#fu').value = p.url || ''; $('#fi').value = p.image || '';
+  $('#fgr').value = p.grade || ''; $('#fva').value = p.variant || ''; $('#fc').value = $('#fc2').value = p.cert || ''; $('#fm').value = p.mint || ''; $('#fu').value = p.url || ''; $('#fi').value = p.image || '';
+  $('#fch').value = p.chain === 'polygon' ? 'polygon' : r && !p.mint && p.chain !== 'solana' ? 'none' : 'solana'; $('#ft').value = p.token_id || ''; $('#fct').value = p.contract || ISSUERS.courtyard.contract;
+  const chainUi = () => { const c = $('#fch').value; $('#fsol').hidden = c === 'polygon'; $('#fpoly').hidden = c !== 'polygon'; $('#fm').closest('label').hidden = c !== 'solana'; };
+  $('#fch').onchange = chainUi; chainUi();
   $('#fd').value = toLocalInput(r ? new Date(r.draws_at) : nextSunday20());
   const showUtc = () => { const d = new Date($('#fd').value); $('#fdu').textContent = isFinite(d) ? `= ${d.toUTCString().slice(0, 22)} UTC · players see a countdown` : ''; };
   const showImg = () => { const u = $('#fi').value.trim(); $('#fp').innerHTML = /^https:\/\//.test(u) ? `<img src="${esc(u)}" alt=""><span class="hint">Preview</span>` : ''; };
@@ -145,7 +152,9 @@ function form() {
   };
   $('#fsave').onclick = async () => {
     const body = { id: r?.id, vault: $('#fv').value, min_level: +$('#fl').value || 0, draws_at: new Date($('#fd').value).toISOString(),
-      prize: { name: $('#fn').value, set: $('#fs').value, grader: $('#fg').value, grade: $('#fgr').value, variant: $('#fva').value, cert: $('#fc').value, mint: $('#fm').value.trim(), url: $('#fu').value.trim(), image: $('#fi').value.trim() } };
+      prize: { name: $('#fn').value, set: $('#fs').value, grader: $('#fg').value, grade: $('#fgr').value, variant: $('#fva').value, url: $('#fu').value.trim(), image: $('#fi').value.trim(),
+        ...($('#fch').value === 'polygon' ? { chain: 'polygon', issuer: 'courtyard', cert: $('#fc2').value, contract: $('#fct').value.trim(), token_id: $('#ft').value.trim() }
+          : { chain: 'solana', cert: $('#fc').value, mint: $('#fch').value === 'solana' ? $('#fm').value.trim() : '', ...($('#fch').value === 'solana' && $('#fm').value.trim() ? { issuer: 'collector_crypt' } : {}) }) } };
     try { $('#fsave').disabled = true; await api('save_raffle', body); toast(r ? 'Raffle saved' : 'Raffle created'); editing = null; showRaffles(); overview(); }
     catch (err) { $('#fmsg').innerHTML = `<span class="err">${esc(err.message)}</span>`; $('#fsave').disabled = false; }
   };
@@ -181,10 +190,13 @@ async function loadEntries() {
       <span class="vt ${r.vault}">${r.vault.toUpperCase()}</span><span class="st ${r.status}">${r.status.toUpperCase()}</span>
       <b>${esc(r.prize?.name)}</b><span class="hint">Draw ${fmt(r.draws_at)} · ${es.length} entries</span><span style="flex:1"></span>
       ${r.status === 'open' ? `<button class="btn" id="edraw" ${es.length ? '' : 'disabled'}>FAIR DRAW NOW</button>` : `<button class="btn" id="ereopen">REOPEN</button>`}</div>
-    ${r.winner_name ? `<div class="banner">🏆 Winner: <b>${esc(r.winner_name)}</b> · <a class="mono" href="https://solscan.io/account/${esc(r.winner_address)}" target="_blank" rel="noopener">${esc(r.winner_address)}</a><br><span class="hint">${proof}. Send the prize to this wallet.</span></div>` : ''}
-    <div class="tablewrap"><table><thead><tr><th>#</th><th>PLAYER</th><th>WALLET</th><th>LEVEL</th><th>ENTERED</th><th></th></tr></thead><tbody>
+    ${r.winner_name ? (() => { const poly = r.prize?.chain === 'polygon', pw = poly ? es.find((e) => e.user_id === r.winner_user)?.polygon : null;
+      return `<div class="banner">🏆 Winner: <b>${esc(r.winner_name)}</b> · Solana <a class="mono" href="https://solscan.io/account/${esc(r.winner_address)}" target="_blank" rel="noopener">${esc(r.winner_address)}</a>
+        ${poly ? `<br>Polygon wallet: ${pw ? `<a class="mono" href="https://polygonscan.com/address/${esc(pw)}" target="_blank" rel="noopener">${esc(pw)}</a> ← <b>send the Courtyard slab here</b>` : '<b style="color:var(--gold)">waiting for the winner to link one</b> (they are asked in the game)'}` : ''}
+        <br><span class="hint">${proof}.${poly ? '' : ' Send the prize to this wallet.'}</span></div>`; })() : ''}
+    <div class="tablewrap"><table><thead><tr><th>#</th><th>PLAYER</th><th>WALLET</th>${r.prize?.chain === 'polygon' ? '<th>POLYGON</th>' : ''}<th>LEVEL</th><th>ENTERED</th><th></th></tr></thead><tbody>
     ${es.map((e, i) => `<tr><td>${i + 1}</td><td><b>${esc(e.name || 'Player')}</b>${e.user_id === r.winner_user ? ' 🏆' : ''}</td>
-      <td class="mono"><a href="https://solscan.io/account/${esc(e.address)}" target="_blank" rel="noopener">${short(e.address)}</a></td><td>${e.level ?? '—'}</td><td>${fmt(e.created_at)}</td>
+      <td class="mono"><a href="https://solscan.io/account/${esc(e.address)}" target="_blank" rel="noopener">${short(e.address)}</a></td>${r.prize?.chain === 'polygon' ? `<td class="mono">${e.polygon ? `<a href="https://polygonscan.com/address/${esc(e.polygon)}" target="_blank" rel="noopener">${short(e.polygon)}</a>` : '—'}</td>` : ''}<td>${e.level ?? '—'}</td><td>${fmt(e.created_at)}</td>
       <td>${e.user_id === r.winner_user ? '<span class="ok">WINNER</span>' : `<button class="btn sm" data-win="${esc(e.user_id)}" data-name="${esc(e.name || 'Player')}">MAKE WINNER</button>`}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">No entries yet.</td></tr>'}
     </tbody></table></div>`;
   el.querySelectorAll('[data-win]').forEach((b) => (b.onclick = async () => {
@@ -214,7 +226,7 @@ async function showPlayers() {
   try { cache.players = (await api('players')).players; } catch (e) { $('#pbody').innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
   tablePlayers();
 }
-const PCOLS = [['name', 'NAME'], ['level', 'LV'], ['skin', 'SKIN'], ['wallet', 'WALLET'], ['entries', 'RAFFLE ENTRIES'], ['wins', 'RAFFLE WINS'], ['bagrunBest', 'BAG RUN BEST'], ['raceWins', 'RACE WINS'], ['lastSeen', 'LAST ACTIVE']];
+const PCOLS = [['name', 'NAME'], ['level', 'LV'], ['skin', 'SKIN'], ['wallet', 'SOLANA'], ['polygon', 'POLYGON'], ['entries', 'RAFFLE ENTRIES'], ['wins', 'RAFFLE WINS'], ['bagrunBest', 'BAG RUN BEST'], ['raceWins', 'RACE WINS'], ['lastSeen', 'LAST ACTIVE']];
 function tablePlayers() {
   const el = $('#pbody'); if (!el) return;
   const rows = cache.players.filter((p) => !pq || (p.name || '').toLowerCase().includes(pq) || (p.wallet || '').toLowerCase().includes(pq))
@@ -222,12 +234,13 @@ function tablePlayers() {
   el.innerHTML = `<p class="hint">${rows.length} of ${cache.players.length} players · click a column to sort</p><div class="tablewrap"><table><thead><tr>${PCOLS.map(([k, l]) => `<th data-s="${k}">${l}${psort === k ? (pdir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>
     ${rows.map((p) => `<tr><td><b>${esc(p.name || '(no name yet)')}</b></td><td>${p.level ?? '—'}</td><td>${esc(p.skin || '—')}</td>
       <td class="mono">${p.wallet ? `<a href="https://solscan.io/account/${esc(p.wallet)}" target="_blank" rel="noopener">${short(p.wallet)}</a> ✓` : '—'}</td>
-      <td>${p.entries}</td><td>${p.wins ? `<b style="color:var(--gold)">${p.wins}</b>` : 0}</td><td>${(p.bagrunBest || 0).toLocaleString()}</td><td>${p.raceWins || 0}</td><td title="${esc(p.lastSeen || '')}">${ago(p.lastSeen)}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">No players yet.</td></tr>'}
+      <td class="mono">${p.polygon ? `<a href="https://polygonscan.com/address/${esc(p.polygon)}" target="_blank" rel="noopener">${short(p.polygon)}</a>` : '—'}</td>
+      <td>${p.entries}</td><td>${p.wins ? `<b style="color:var(--gold)">${p.wins}</b>` : 0}</td><td>${(p.bagrunBest || 0).toLocaleString()}</td><td>${p.raceWins || 0}</td><td title="${esc(p.lastSeen || '')}">${ago(p.lastSeen)}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">No players yet.</td></tr>'}
     </tbody></table></div>`;
   el.querySelectorAll('[data-s]').forEach((th) => (th.onclick = () => { if (psort === th.dataset.s) pdir = -pdir; else { psort = th.dataset.s; pdir = -1; } tablePlayers(); }));
 }
 function csv() {
-  const head = ['id', 'name', 'level', 'skin', 'wallet', 'entries', 'wins', 'bagrunBest', 'raceWins', 'lastSeen'];
+  const head = ['id', 'name', 'level', 'skin', 'wallet', 'polygon', 'entries', 'wins', 'bagrunBest', 'raceWins', 'lastSeen'];
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const txt = [head.join(',')].concat(cache.players.map((p) => head.map((k) => q(p[k])).join(','))).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv' })); a.download = `bagverse-players-${new Date().toISOString().slice(0, 10)}.csv`; a.click();

@@ -25,7 +25,7 @@ import drawHandler from './raffle/draw.js';
 import { TREASURY, USDC_MINT } from '../src/treasury.js';
 
 const clean = (v, n = 200) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
-const PRIZE_KEYS = ['name', 'set', 'grader', 'grade', 'variant', 'cert', 'mint', 'url', 'image'];
+const PRIZE_KEYS = ['name', 'set', 'grader', 'grade', 'variant', 'cert', 'mint', 'url', 'image', 'chain', 'issuer', 'contract', 'token_id'];
 
 export default async function handler(req, res, deps = {}) {
   const url = new URL(req.url || '/', 'http://x'), body = req.method === 'POST' ? await readBody(req) : {};
@@ -52,6 +52,11 @@ export default async function handler(req, res, deps = {}) {
         const prize = Object.fromEntries(PRIZE_KEYS.map((k) => [k, clean(body.prize?.[k], k === 'image' || k === 'url' ? 600 : 160)]).filter(([, v]) => v));
         if (!prize.name) return send(res, 400, { error: 'The prize needs a name.' });
         for (const k of ['url', 'image']) if (prize[k] && !/^https:\/\//.test(prize[k])) return send(res, 400, { error: `The ${k === 'url' ? 'card link' : 'image'} must start with https://` });
+        if (prize.chain === 'polygon') {   // Courtyard slab on Polygon: contract + token id instead of a Solana mint
+          prize.issuer = prize.issuer || 'courtyard'; delete prize.mint;
+          if (prize.contract && !/^0x[0-9a-fA-F]{40}$/.test(prize.contract)) return send(res, 400, { error: 'Polygon contract must be a 0x… address.' });
+          if (prize.token_id && !/^\d{1,80}$/.test(prize.token_id)) return send(res, 400, { error: 'Token ID must be a number.' });
+        } else { prize.chain = 'solana'; delete prize.contract; delete prize.token_id; if (prize.mint && !prize.issuer) prize.issuer = 'collector_crypt'; }
         const row = { vault, prize, min_level: Math.max(0, Math.min(999, body.min_level | 0)), draws_at: new Date(when).toISOString() };
         if (body.id) {
           const cur = (await q(sb.from('raffles').select('status').eq('id', body.id).maybeSingle()));
@@ -70,7 +75,9 @@ export default async function handler(req, res, deps = {}) {
         const ids = [...new Set(es.map((e) => e.user_id))];
         const lb = ids.length ? await q(sb.from('lb').select('id, doc').in('id', ids)) : [];
         const lv = Object.fromEntries(lb.map((r) => [r.id, r.doc?.lv | 0]));
-        return send(res, 200, { entries: es.sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).map((e) => ({ ...e, level: lv[e.user_id] ?? null })) });
+        const pw = ids.length ? await sb.from('linked_wallets').select('user_id, address').eq('chain', 'polygon').in('user_id', ids).then((x) => x.data || []).catch(() => []) : [];   // table may not exist yet
+        const poly = Object.fromEntries(pw.map((w) => [w.user_id, w.address]));
+        return send(res, 200, { entries: es.sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).map((e) => ({ ...e, level: lv[e.user_id] ?? null, polygon: poly[e.user_id] || null })) });
       }
       case 'set_winner': {
         const id = clean(body.raffle_id, 64);
@@ -102,6 +109,8 @@ export default async function handler(req, res, deps = {}) {
         const P = new Map(), get = (id) => (P.has(id) ? P.get(id) : (P.set(id, { id, name: null, level: null, skin: null, bagrunBest: 0, raceWins: 0, wallet: null, verifiedAt: null, entries: 0, wins: 0, lastSeen: null }), P.get(id)));
         for (const r of lb) { const p = get(r.id), d = r.doc || {}; Object.assign(p, { name: d.n || null, level: d.lv | 0, skin: d.skin || null, bagrunBest: d.best | 0, raceWins: d.wins | 0, lastSeen: r.updated_at }); }
         for (const w of ws) Object.assign(get(w.user_id), { wallet: w.address, verifiedAt: w.verified_at, holderSkins: w.skins || [] });
+        const lw = await sb.from('linked_wallets').select('user_id, chain, address').limit(5000).then((x) => x.data || []).catch(() => []);
+        for (const w of lw) if (w.chain === 'polygon') get(w.user_id).polygon = w.address;
         for (const e of es) get(e.user_id).entries++;
         for (const r of rs) if (r.winner_user) get(r.winner_user).wins++;
         return send(res, 200, { players: [...P.values()].sort((a, b) => Date.parse(b.lastSeen || 0) - Date.parse(a.lastSeen || 0)) });

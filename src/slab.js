@@ -84,3 +84,12 @@ export function loadImage(src) {
   if (!cache.has(src)) cache.set(src, new Promise((res, rej) => { const i = new Image(); if (/^https?:/.test(src)) i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; }));
   return cache.get(src);
 }
+
+/** plain card art when the real image can't be loaded */
+export function placeholderArt(name = '') {
+  const c = document.createElement('canvas'); c.width = 300; c.height = 400; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 300, 400); gr.addColorStop(0, '#3b1a5e'); gr.addColorStop(1, '#0c1420'); g.fillStyle = gr; g.fillRect(0, 0, 300, 400);
+  g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 6; g.strokeRect(18, 18, 264, 364);
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = '700 28px Rajdhani, sans-serif'; g.fillText(String(name).slice(0, 18).toUpperCase(), 150, 210);
+  return c.toDataURL('image/png');
+}

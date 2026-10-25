@@ -2,7 +2,7 @@
 // filters (All / Owned / Unlocked / Favorites) and Back / Shop / Equip. Shown after loading and in game (K).
 // The preview renders with the main renderer into the main canvas while the screen is open (no second GL context).
 import { gateFor } from './nft-gates.js';
-import { SKIN_GRADE, makeSlab, loadImage, labelCanvas } from './slab.js';
+import { SKIN_GRADE, makeSlab, loadImage, labelCanvas, placeholderArt } from './slab.js';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { makeCharacter } from './player.js';
@@ -665,6 +665,7 @@ export class SkinScreen {
     const use = this.$('sk-use');
     if (it.kind === 'gear') { use.hidden = !it.owned; use.disabled = false; use.textContent = it.action || 'RIDE IT'; }
     else if (it.kind === 'skin' && it.owned) { use.hidden = false; use.disabled = it.skin === eq; use.textContent = it.skin === eq ? 'EQUIPPED ✓' : 'EQUIP THIS SKIN'; }
+    else if (it.action) { use.hidden = false; use.disabled = false; use.textContent = it.action; }
     else if (it.url) { use.hidden = false; use.disabled = false; use.textContent = it.owned ? 'VIEW ON-CHAIN ↗' : 'SEE THE PRIZE ↗'; }
     else if (!it.owned && it.kind === 'card') { use.hidden = false; use.disabled = false; use.textContent = 'HOW TO WIN IT'; }
     else use.hidden = true;
@@ -677,7 +678,7 @@ export class SkinScreen {
       else { stage.classList.add('nomodel'); stage.dataset.lock = 'COMING SOON'; }
       return;
     }
-    loadImage(it.img).then((img) => {
+    loadImage(it.img).catch(() => loadImage(placeholderArt(it.name))).then((img) => {   // a CDN without CORS can't be a texture: placeholder art
       if (this.sel !== id || this.mode !== 'collection') return;
       if (this.slab) { this.stand.remove(this.slab); if (!this.slab.userData.gear) this.slab.userData.dispose?.(); }
       this.slab = makeSlab(it, img); this.stand.add(this.slab); this.pop = 0;

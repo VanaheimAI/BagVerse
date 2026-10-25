@@ -34,7 +34,8 @@
     "postprocessing": "^6.39.5",
     "qrcode": "^1.5.4",
     "three": "^0.170.0",
-    "three-mesh-bvh": "^0.8.3"
+    "three-mesh-bvh": "^0.8.3",
+    "viem": "^2.57.11"
   },
   "devDependencies": {
     "@gltf-transform/cli": "^4.1.1",

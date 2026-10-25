@@ -14,6 +14,7 @@ import enter from '../api/raffle/enter.js';
 import draw from '../api/raffle/draw.js';
 import adminApi from '../api/admin.js';
 import adsApi from '../api/ads.js';
+import evmApi from '../api/wallet/evm.js';
 import { fakeAdmin } from './fake-admin.mjs';
 
 const [dist = '/tmp/dist-fake', port = 4175] = process.argv.slice(2);
@@ -31,7 +32,7 @@ const payChain = async (_u, { body }) => { const { method, params } = JSON.parse
       postTokenBalances: [{ accountIndex: 2, owner: TREASURY, mint: USDC_MINT, uiTokenAmount: { amount: String(p.amount * 1e6) } }, { accountIndex: 1, owner: p.payer, mint: USDC_MINT, uiTokenAmount: { amount: String(1e9 - p.amount * 1e6) } }] } }; }
   return { json: async () => ({ result }) }; };
 const payDeps = { ...deps, rpc: 'fake', fetchFn: payChain };
-const routes = { '/api/wallet/verify': verify, '/api/wallet/holdings': holdings, '/api/raffle/enter': enter, '/api/raffle/draw': draw, '/api/admin': adminApi, '/api/ads': adsApi };
+const routes = { '/api/wallet/verify': verify, '/api/wallet/holdings': holdings, '/api/raffle/enter': enter, '/api/raffle/draw': draw, '/api/admin': adminApi, '/api/ads': adsApi, '/api/wallet/evm': evmApi };
 process.env.ADMIN_SECRET ||= 'test-secret';
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png', '.glb': 'model/gltf-binary', '.mp3': 'audio/mpeg', '.woff2': 'font/woff2', '.woff': 'font/woff', '.svg': 'image/svg+xml', '.txt': 'text/plain', '.wasm': 'application/wasm', '.ico': 'image/x-icon' };
 const body = (req) => new Promise((r) => { let s = ''; req.on('data', (c) => (s += c)); req.on('end', () => { try { r(JSON.parse(s || '{}')); } catch (_) { r({}); } }); });

@@ -123,3 +123,24 @@ create policy "raffles read" on public.raffles for select using (true);
 drop policy if exists "raffle entries read" on public.raffle_entries;
 create policy "raffle entries read" on public.raffle_entries for select using (true);
 -- ad bookings: no public policies (the game reads live ads through /api/ads); only the server writes anything
+
+-- ---------------------------------------------------------------- linked wallets on other chains (Polygon)
+-- Polygon wallets for Courtyard slab prizes: a raffle winner whose prize is on Polygon links one to receive it.
+-- Written only by the server (api/wallet/evm) after a Sign-In with Ethereum check. The Solana wallet stays in
+-- public.wallets, untouched.
+create table if not exists public.linked_wallets (
+  user_id      text not null,
+  chain        text not null check (chain in ('polygon')),
+  address      text not null,
+  verified_at  timestamptz not null default now(),
+  message      text,
+  signature    text,
+  nonce        text,
+  primary key (user_id, chain),
+  unique (chain, address)
+);
+alter table public.linked_wallets enable row level security;
+drop policy if exists "linked wallets read" on public.linked_wallets;
+create policy "linked wallets read" on public.linked_wallets for select using (true);
+drop policy if exists "linked wallets delete own" on public.linked_wallets;
+create policy "linked wallets delete own" on public.linked_wallets for delete to authenticated using (user_id = auth.uid()::text);

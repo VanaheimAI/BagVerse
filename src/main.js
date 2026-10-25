@@ -38,6 +38,8 @@ import { Wallet, short as shortAddr, MOBILE as WALLET_MOBILE } from './wallet.js
 import { NFT_GATES, gateFor } from './nft-gates.js';
 import { Raffles, countdown } from './raffles.js';
 import { fx } from './fx.js';
+import { evmWallets, linkPolygon, linkedPolygon, metamaskLink } from './evm.js';
+import { prizeChain, prizeIssuer } from './chains.js';
 import QRCode from 'qrcode';
 import { TREASURY, AD_DAYS, adPrice } from './treasury.js';
 import { session } from './net.js';
@@ -909,19 +911,47 @@ async function openAdSlot(bb, price, live) {
 // ---------------------------------------------------------------- vaults (raffles)
 const raffles = new Raffles();
 const escR = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-raffles.onDrawn = (r, mine) => {
+// Polygon prizes (Courtyard slabs): only the winner is asked to link a Polygon wallet, to receive the slab
+function openPolygonLink(onDone) {
+  const ws = evmWallets(), mobile = /android|iphone|ipad/i.test(navigator.userAgent);
+  hud.modal('LINK A POLYGON WALLET', `<div class="wl">
+    <p>Your prize is a Courtyard slab on <b>Polygon</b>. Link a Polygon wallet (MetaMask, Rabby, Coinbase Wallet…) so the team can send it to you. You'll sign a free message: no transaction, no gas.</p>
+    ${ws.length ? `<div class="wl-list">${ws.map((w, i) => `<button class="wl-w" data-ev="${i}">${w.info.icon ? `<img src="${escR(w.info.icon)}" alt="">` : ''}${escR(w.info.name)}</button>`).join('')}</div>`
+      : mobile ? `<p>No Polygon wallet in this browser.</p><div class="wl-list"><a class="wl-w" href="${metamaskLink()}">Open in MetaMask</a></div>`
+      : `<p>No Polygon wallet found in this browser. Install <a href="https://metamask.io/download/" target="_blank" rel="noopener">MetaMask</a> or Rabby, then reload.</p>`}
+    <p class="wl-err" hidden></p></div>`);
+  document.querySelectorAll('[data-ev]').forEach((b) => (b.onclick = async () => {
+    const err = document.querySelector('.wl-err'); err.hidden = true; b.disabled = true; b.classList.add('busy');
+    try { const addr = await linkPolygon(ws[+b.dataset.ev], progress.s.name || 'Player'); sfx.play('success'); hud.toast('POLYGON WALLET LINKED · ' + addr.slice(0, 6) + '…' + addr.slice(-4)); hud.closeModal(); onDone?.(addr); }
+    catch (e) { err.textContent = e.message; err.hidden = false; b.disabled = false; b.classList.remove('busy'); }
+  }));
+}
+raffles.onDrawn = async (r, mine) => {
   const vault = r.vault === 'wano' ? 'WANO VAULT' : 'KANTO VAULT', prize = r.prize?.name || 'graded card';
   if (mine) {
     sfx.play('achieve');
+    const poly = prizeChain(r.prize) === 'polygon', linked = poly ? await linkedPolygon() : null;
     hud.modal(`🏆 YOU WON THE ${vault} RAFFLE!`, `
-      <p>Your entry was drawn for <b>${escR(prize)}</b>${r.prize?.grade ? ` (${escR(r.prize.grader || '')} ${escR(r.prize.grade)})` : ''}.</p>
-      <div class="row"><span>Your wallet</span><b class="wl-addr">${escR(shortAddr(r.winner_address))}</b></div>
+      <p>Your entry was drawn for <b>${escR(prize)}</b>${r.prize?.grade ? ` (${escR(r.prize.grader || '')} ${escR(r.prize.grade)})` : ''}${poly ? ', a Courtyard slab on Polygon' : ''}.</p>
+      ${poly ? `<div class="row"><span>Polygon wallet</span><b class="wl-addr">${linked ? escR(linked.address.slice(0, 6) + '…' + linked.address.slice(-4)) : 'NOT LINKED YET'}</b></div>`
+        : `<div class="row"><span>Your wallet</span><b class="wl-addr">${escR(shortAddr(r.winner_address))}</b></div>`}
       <div class="row"><span>Entries</span><b>${r.entries | 0}</b></div>
-      <p style="opacity:.8">The BagVerse team will send the prize to this verified wallet. Keep it linked until it arrives.</p>`);
+      <p style="opacity:.8">${poly && !linked ? 'Link a Polygon wallet to receive it. The team sends the slab there.' : 'The BagVerse team will send the prize to this wallet. Keep it linked until it arrives.'}</p>
+      ${poly && !linked ? '<button id="rf-poly">LINK POLYGON WALLET</button>' : ''}`);
+    if ($('rf-poly')) $('rf-poly').onclick = () => openPolygonLink((addr) => { raffles.polygon = { address: addr }; });
   } else if (r.winner_name && Date.now() - Date.parse(r.draws_at) < 3 * 86400e3) {
     hud.chat('SYSTEM', vault, `${r.winner_name} won ${prize} (${r.entries | 0} entries).`, '#ffc83d');
   }
 };
+// a winner of a Polygon prize who hasn't linked a wallet yet gets a reminder each session
+raffles.onChange(async () => {
+  if (raffles.polyAsked || !raffles.uid) return;
+  const won = raffles.list.filter((r) => r.winner_user === raffles.uid && prizeChain(r.prize) === 'polygon');
+  if (!won.length) return;
+  raffles.polyAsked = true;
+  raffles.polygon = await linkedPolygon();
+  if (!raffles.polygon) hud.chat('SYSTEM', 'BagVerse', `You won ${won[0].prize?.name || 'a Courtyard slab'}! Link a Polygon wallet to receive it: open your Collection (I) → Loot.`, '#ffc83d');
+});
 raffles.start();
 function openVault(zid, label) {
   const L = progress.s.level, onepiece = zid === 'rwa_vault', vault = onepiece ? 'wano' : 'kanto';
@@ -933,13 +963,14 @@ function openVault(zid, label) {
   const prizeHtml = r ? `<div class="rwa">
       ${img ? `<img src="${escR(img)}" alt="${escR(pz.name)}" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
       <div>
-        <div class="rwa-k">THIS WEEK'S RAFFLE${local ? ' · ' + local.issuer.toUpperCase() : ''}</div>
+        <div class="rwa-k">THIS WEEK'S RAFFLE${prizeIssuer(pz) ? ' · ' + prizeIssuer(pz).name.toUpperCase() + ' · ' + (prizeChain(pz) === 'polygon' ? 'POLYGON' : 'SOLANA') : ''}</div>
         <div class="rwa-t">${escR(pz.name || 'Graded card · TBA')}</div>
         ${pz.set ? `<div class="row"><span>Set</span><b>${escR(pz.set)}</b></div>` : ''}
         ${pz.grade ? `<div class="row"><span>Grade</span><b>${escR(pz.grader || '')} ${escR(pz.grade)}</b></div>` : ''}
         ${pz.variant ? `<div class="row"><span>Variant</span><b>${escR(pz.variant)}</b></div>` : ''}
         ${pz.cert ? `<div class="row"><span>Cert</span><b>${escR(pz.grader || '')} #${escR(pz.cert)}</b></div>` : ''}
-        ${pz.mint ? `<div class="row"><span>Mint</span><b title="${escR(pz.mint)}">${escR(shortMint(pz.mint))}</b></div>` : ''}
+        ${pz.mint && prizeChain(pz) === 'solana' ? `<div class="row"><span>Mint</span><b title="${escR(pz.mint)}">${escR(shortMint(pz.mint))}</b></div>` : ''}
+        ${prizeChain(pz) === 'polygon' && pz.token_id ? `<div class="row"><span>Token</span><b title="${escR(pz.contract || '')} #${escR(pz.token_id)}">#${escR(String(pz.token_id).slice(0, 10))}${String(pz.token_id).length > 10 ? '…' : ''}</b></div>` : ''}
         ${/^https:\/\//.test(pz.url || '') ? `<a class="rwa-link" href="${escR(pz.url)}" target="_blank" rel="noopener noreferrer">VIEW THE CARD ↗</a>` : ''}
       </div></div>` : `<p>${raffles.offline ? 'Raffles run on the BagVerse website (bag-verse-ten.vercel.app).' : raffles.ready ? `No ${onepiece ? 'One Piece' : 'Pokémon'} raffle is open right now. The next slab is announced here.` : 'Loading raffles…'}</p>`;
   const w = wallet.status === 'verified', entered = r && raffles.entered(r.id);
@@ -1098,6 +1129,7 @@ const skins = new SkinScreen({
   getStats: () => { const s = progress.s, rw = raffles.list.filter((r) => r.winner_user && r.winner_user === raffles.uid).length;
     return [['LEVEL', s.level], ['PLAYTIME', `${s.playMin | 0}m`], ['RAFFLE WINS', rw], ['TILE WINS', tileDrop.S.wins]]; },
   onUse: (it) => {
+    if (it.needsPolygon) { skins.close(); setTimeout(() => openPolygonLink((addr) => { raffles.polygon = { address: addr }; }), 700); return; }
     if (it.kind === 'gear' && it.id === 'gear:punk') { skins.close(); setTimeout(() => summonScooter('punk'), 700); return; }
     if (it.url) { window.open(it.url, '_blank', 'noopener'); return; }
     skins.toast(it.vault === 'wano' ? 'ENTER FREE AT THE WANO VAULT (EAST OF THE PLAZA) WITH A VERIFIED WALLET' : 'ENTER FREE AT THE KANTO VAULT (BULL RUN) WITH A VERIFIED WALLET');
@@ -1119,6 +1151,8 @@ function collectionLoot() {   // graded cards this player won in vault raffles
     out.push({ id: 'card:' + r.id, vault: r.vault, name: pz.name || 'Graded card', sub: pz.set || (r.vault === 'wano' ? 'Graded One Piece card' : 'Graded Pokémon card'),
       cert: pz.cert ? `${pz.grader || ''} #${pz.cert}` : '', grade: { co: pz.grader || 'BVG', n: pz.grade || '?', word: pz.grade === '10' ? 'GEM MINT' : 'GRADED' },
       img: local?.photo || (/^https:\/\//.test(pz.image || '') ? pz.image : cardArt(r.vault)), slabPhoto: !!local?.photo, owned: true, url: /^https:\/\//.test(pz.url || '') ? pz.url : null,
+      ...(prizeChain(pz) === 'polygon' ? { sub: `${pz.set || 'Graded card'} · Courtyard · Polygon`, action: raffles.polygon ? null : 'LINK POLYGON WALLET', needsPolygon: !raffles.polygon,
+        desc: `Won in the ${V} Vault raffle. A Courtyard slab on Polygon: ${raffles.polygon ? `the team sends it to your Polygon wallet ${raffles.polygon.address.slice(0, 6)}…${raffles.polygon.address.slice(-4)}.` : 'link a Polygon wallet so the team can send it to you.'}` } : {}),
       desc: `Won in the ${V} Vault raffle (${new Date(r.draws_at).toUTCString().slice(5, 16)}). The team sends it to your verified wallet.` });
   }
   return out;

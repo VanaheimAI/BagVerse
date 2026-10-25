@@ -70,7 +70,7 @@ Mobile: left joystick, drag right side to look, JUMP and E buttons.
 | Characters | Pick the Golden King or Maria on the loading screen (remembered per browser); the crowd mixes both. The king's rig was repaired and re-weighted (see Characters below). Placeholder Idle/Walk/Run/Jump/Fall/Wave/Dance clips are keyed in Blender |
 | World | The Bag Square + Ad Canyon (12 towers), RWA Vault Showroom (glass pavilion, 3 rotating prize holograms, live tournament countdown), 4 arcade portals, the Trading Floor tickers, and districts: HODL Heights, Doge & Bonk Park, Jeet Wastelands / Rekt, FOMO Valley (walkable trench + bridges), Copium Refinery, Chad's Bull Run + rocket + Apex RWA Arena, Pepe's Swamp / Feels Good Man Arcade, Arcade Portals strip, GM Gate |
 | Billboards | 20 named screens (`BB_01..20`, 16:9 and 9:16) showing rotating placeholder ads; walk up + E for the rent card; look at one for 10 s → +50 XP (watch-to-earn preview) |
-| HUD | Level/XP, proof-of-play timer (pauses after 90 s idle, as in the GDD), holder tier badge, $BAG balance, minimap, full map with fast travel, zone banners, chat with speech bubbles, emotes, inventory showing the GDD skin schema |
+| HUD | Level/XP, proof-of-play timer (pauses after 90 s idle, as in the GDD), holder tier badge, $VERSE balance, minimap, full map with fast travel, zone banners, chat with speech bubbles, emotes, inventory showing the GDD skin schema |
 | Crowd | 16 wandering NPCs with nameplates, tiers, auras for Lv 50+, chat chatter (stand-ins until multiplayer) |
 
 All progression is **local-only** (localStorage) for now. It mirrors the on-chain schema: `Level`, `Total_XP`, `Playtime_Minutes`, `RWA_Wins`, `Visual_Tier`.
@@ -375,7 +375,7 @@ The display names come from `SKINS` in `skins.js`: SHIB GIRL, PEPE GUY and SANTA
 
 ## Mobile HUD (Oct 21)
 - **Touch layout** (`body.touch`, bottom of `src/style.css`): every control has its own slot, sized by CSS variables (`--mm`, `--btn`, `--joy`, `--jump`...) and kept clear of safe areas (`viewport-fit=cover` + `env(safe-area-inset-*)`).
-  - Portrait: level and tier top-left; minimap and $BAG top-right with a column of round buttons under it (Skins, Inventory, Map, Chat, Settings); joystick bottom-left with a light chat feed above it; Jump, Use (E) and Emote bottom-right. The emote picker opens as a column to the left of the Emote button.
+  - Portrait: level and tier top-left; minimap and $VERSE top-right with a column of round buttons under it (Skins, Inventory, Map, Chat, Settings); joystick bottom-left with a light chat feed above it; Jump, Use (E) and Emote bottom-right. The emote picker opens as a column to the left of the Emote button.
   - Landscape phones (`max-height: 540px`): the round buttons become a row beside the minimap, and all controls shrink. Tablets get a larger version.
 - **Hidden on touch:** the logo, the proof-of-play line, the zone chip (the zone toast still shows), keyboard hints and the always-on chat input. The ⚙ button opens Time of day and GFX. 💬 opens a full-width chat bar with a 16 px input, so iOS doesn't zoom. The chat feed fades while a popup is open.
 - **Embedded:** inside an iframe (the Claude app's viewer), `body.embedded` moves the top row down so the host's close and menu buttons don't cover it.
@@ -438,7 +438,7 @@ Implements the "long grind" blueprint (research report, Oct 22), plus the onboar
 - **Milestones (cumulative XP):** Lv 10 ≈ 1.0K · 25 ≈ 9.5K · 50 ≈ 50K · 100 ≈ 197K · 150 ≈ 390K · 200 ≈ 625K · 250 ≈ 894K.
 - **Modelled pace:** engaged players reach Lv 250 in about 16 months, hardcore in about 8.5 months; casual players reach Lv 100 in about 8 months. These are model estimates; re-baseline after 4–6 weeks of telemetry.
 - **Tiers:** BASE 1 · CHROME 25 · HOLO 50 · APEX 100 · PRISM 150 · ECLIPSE 200 · GENESIS 250. Each band shows I/II/III sub-steps.
-- **Migration:** old saves keep every XP point and are re-levelled on the new curve. XP no longer mints $BAG, and the old 3× multiplier is gone.
+- **Migration:** old saves keep every XP point and are re-levelled on the new curve. XP no longer mints $VERSE, and the old 3× multiplier is gone.
 
 ## XP sources (caps per day)
 | Source | XP | Guard |
@@ -454,7 +454,7 @@ Implements the "long grind" blueprint (research report, Oct 22), plus the onboar
 | Flashmob host | 50 | 200/day |
 | GM | 25 | Once a day |
 | Achievements | 100–5,000 | 37 awards, once each |
-| $BAG holders | APE +5% · DEGEN +10% · WHALE +15% | Play XP only |
+| $VERSE holders | APE +5% · DEGEN +10% · WHALE +15% | Play XP only |
 
 ## Onboarding flow (session 1 → about Lv 10–13)
 1. **Welcome card:** what levelling, missions, RWA prizes and unlocks are, then Start the guide or Skip.
@@ -694,3 +694,14 @@ The Collection screen (I) no longer lists skins (those stay on the skin screen, 
 - The game polls live ads every 2 minutes (`op=live`) and swaps screens to the advertiser's image, or back to the house creatives when an ad ends or is pulled (`World.setCreative` / `clearCreative`).
 - Payment checks and refunds need `SOLANA_RPC_URL`. Table `ad_bookings` in `supabase/schema.sql` (the block is safe to re-run; it adds the newer columns).
 - Tests: `node tools/api_admin_test.mjs` (sign-in, raffles, manual winner, players, bookings, payment, upload key, pull, reinstate, refund), `node tools/refund_tx_test.mjs` (refund transaction decodes correctly), `tools/ads_test.mjs` and `tools/admin_test.mjs` (browser, on `tools/wallet_server.mjs` with a fake chain).
+
+## Polygon + Courtyard slabs, $VERSE (Oct 25)
+Added next to the Solana setup without changing it (Solana sign-in, holder skins, raffle entry and draws, ad payments and refunds all run as before).
+- **$VERSE** is the token's new name (was $BAG): HUD and copy. `src/treasury.js` → `VERSE = { symbol, chain: 'solana', mint: null }`; the mint goes there once the token exists.
+- **`src/chains.js`:** chains (Solana home chain, Polygon) and slab issuers: Collector Crypt (Solana, mint) and Courtyard (Polygon, contract `0x251be3a17af4892035c37ebf5890f4a4d889dcad` + token id; check on Polygonscan). `prizeChain` / `prizeIssuer` treat prizes saved before this as Solana.
+- **Raffle prizes on Polygon:** in /admin choose "Courtyard · Polygon" and give the token ID (contract pre-filled). The vault shows a COURTYARD · POLYGON badge and the token. Entry is unchanged (free, verified Solana wallet).
+- **Only the winner links a Polygon wallet:** the win pop-up says the prize is on Polygon and offers LINK POLYGON WALLET; until linked there's a chat reminder each session and the slab in Collection → Loot has the same button. Wallets are found with EIP-6963 (MetaMask, Rabby, Coinbase Wallet…, else `window.ethereum`); phones without one get "Open in MetaMask". The player signs a Sign-In with Ethereum message (chain 137, domain, Request ID = their account, fresh); `POST /api/wallet/evm` checks it with viem (smart-contract wallets too when `POLYGON_RPC_URL` or `ALCHEMY_API_KEY` is set) and stores it in **`public.linked_wallets`** (user, chain, address; one player per address). The Solana `wallets` table is untouched.
+- **Dashboard:** Entries & Winners shows each entrant's Polygon wallet for Polygon raffles, and the winner banner says where to send the Courtyard slab (or that the winner hasn't linked one yet). Players has Solana and Polygon columns (and CSV).
+- **Holder skins from Courtyard:** a gate `{ skin, chain: 'polygon', contract }` in `src/nft-gates.js` is checked on the linked Polygon wallet through Alchemy's NFT API (`ALCHEMY_API_KEY`).
+- SQL: the "linked wallets on other chains" block at the end of `supabase/schema.sql`.
+- Tests: `node tools/api_evm_test.mjs` (linking rules with real Ethereum signatures, Polygon prizes, gates, admin views), `tools/polygon_win_test.mjs` (winner flow in a browser with an EIP-6963 test wallet).

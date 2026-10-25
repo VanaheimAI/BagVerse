@@ -61,7 +61,7 @@ export class MissionsUI {
         <li><b>Dailies</b> ${DAILY_XP} XP each plus ${DAILY_BONUS} for all three. Streak bonus +10/20/30% at 7/14/30 days; a freeze is earned every 7 days.</li>
         <li><b>Weeklies</b> ${WEEKLY_XP} XP each plus ${fmt(WEEKLY_BONUS)} once ${WEEKLY_BONUS_AT} are done.</li>
         <li><b>Bags</b> 100 XP each, 1,000 XP per district cleared (20 per district, 220 total).</li>
-        <li><b>Ads, flashmobs, GM</b> capped daily (250 / 200 / 25 XP). XP can't be bought; $BAG holders get at most +15% on play XP.</li>
+        <li><b>Ads, flashmobs, GM</b> capped daily (250 / 200 / 25 XP). XP can't be bought; $VERSE holders get at most +15% on play XP.</li>
       </ul>
       <h4>RWA prize kiosks</h4>
       <ul class="mq-facts">${KIOSKS.map((k) => `<li><b>${esc(k.name)}</b> ${esc(k.event)}: ${esc(k.prize)}. Free entry, Lv ${TIER_LEVEL[k.tier]}+.</li>`).join('')}
