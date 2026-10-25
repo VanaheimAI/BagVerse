@@ -958,7 +958,15 @@ raffles.start();
 // (prize.model, a GLB uploaded in /admin) replaces the placeholder pack in its slot.
 const PACKS = ['destined_rivals', 'journey_together', 'mega_evolution'].map((n) => `assets/packs/${n}.glb`);
 const showcaseKey = [], showcaseRaffle = { apex_arena: [] }, glbCache = new Map();
-const loadGlb = (url) => { if (!glbCache.has(url)) glbCache.set(url, lazyLoader.loadAsync(url).catch((e) => { glbCache.delete(url); throw e; })); return glbCache.get(url); };
+const glbReady = new Map(), glbBad = new Set(), glbWait = new Set();   // url -> loaded scene (for the Collection cards); urls that failed to load
+const loadGlb = (url) => { if (!glbCache.has(url)) glbCache.set(url, lazyLoader.loadAsync(url).then((g) => { glbReady.set(url, g.scene); return g; }).catch((e) => { glbCache.delete(url); throw e; })); return glbCache.get(url); };
+/** the 3D model shown for a raffle: its uploaded GLB, else (Kanto) the placeholder pack in its showcase spot */
+function raffleModelUrl(r) {
+  if (/^https:\/\//.test(r?.prize?.model || '') && !glbBad.has(r.prize.model)) return r.prize.model;
+  if (r?.vault !== 'kanto') return null;
+  const i = showcaseRaffle.apex_arena.findIndex((x) => x?.id === r.id);
+  return PACKS[i >= 0 ? i : 0];
+}
 function syncShowcases() {
   if (!world.showcases?.apex_arena) return;
   const open = raffles.openFor('kanto'), slots = [null, null, null];
@@ -1193,6 +1201,16 @@ function collectionLoot() {   // graded cards this player won in vault raffles
   }
   return out;
 }
+// the raffle's GLB for the Collection (card portrait + 3D on the stand); loads it on first use, then refreshes the tab
+function raffleModel(r) {
+  const url = raffleModelUrl(r); if (!url) return {};
+  const obj = glbReady.get(url);
+  if (obj) return { object: obj, modelUrl: url };
+  if (glbBad.has(url)) return {};
+  if (glbWait.has(url)) return { modelUrl: url, modelLoading: true };
+  glbWait.add(url); loadGlb(url).catch(() => { glbBad.add(url); }).finally(() => { glbWait.delete(url); skins.refreshRaffles(); });   // a broken upload: next time the pack (Kanto) or the slab card
+  return { modelUrl: url, modelLoading: true };
+}
 // live raffles for the Collection's RAFFLES tab: look only; entering happens at the vault itself
 function collectionRaffles() {
   return ['kanto', 'wano'].flatMap((v) => raffles.openFor(v)).sort((a, b) => Date.parse(a.draws_at) - Date.parse(b.draws_at)).map((r) => {
@@ -1201,6 +1219,7 @@ function collectionRaffles() {
     return { id: 'raffle:' + r.id, raffleId: r.id, vault: r.vault, name: pz.name || 'Graded card', sub: pz.set || (r.vault === 'wano' ? 'Graded One Piece card' : 'Graded Pokémon card'),
       cert: pz.cert ? `${pz.grader || ''} #${pz.cert}` : '', grade: { co: pz.grader || 'BVG', n: pz.grade || '?', word: pz.grade === '10' ? 'GEM MINT' : 'GRADED' },
       img: local?.photo || (/^https:\/\//.test(pz.image || '') ? pz.image : cardArt(r.vault)), slabPhoto: !!local?.photo, until: Date.parse(r.draws_at), entered: inn, entries: r.entries | 0,
+      ...raffleModel(r),
       desc: `${inn ? "You're in this draw. " : ''}${r.entries | 0} ${r.entries === 1 ? 'entry' : 'entries'} so far${lvl ? ` · level ${lvl}+` : ''}. ${inn ? 'Good luck!' : `Free with a verified wallet: enter at the ${V} Vault (${place})${r.vault === 'kanto' ? ' at its door or its floating pack' : ''}.`}` };
   });
 }

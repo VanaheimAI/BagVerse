@@ -622,15 +622,20 @@ export class SkinScreen {
     const gear = (this.getGear?.() || []).map((g) => ({ kind: 'gear', grade: { co: 'GEAR', n: '', word: '' }, ...g }));
     for (const g of gear) if (!g.img && g.object) g.img = this.modelThumb(g.object, g.rarity);
     const raf = (this.getRaffles?.() || []).map((r) => ({ kind: 'raffle', rarity: 'legendary', color: RARITY.legendary.color, owned: true, ...r }));
+    this.modelThumbs ||= new Map();
+    for (const r of raf) if (r.object) {
+      if (!this.modelThumbs.has(r.modelUrl)) { try { this.modelThumbs.set(r.modelUrl, this.modelThumb(r.object, 'legendary', -0.35)); } catch (_) {} }
+      r.mthumb = this.modelThumbs.get(r.modelUrl);
+    }
     return [...loot, ...gear.filter((g) => g.owned), ...gear.filter((g) => !g.owned), ...raf];
   }
   /** a card portrait of a 3D object (3/4 view, rarity backdrop) as a data URL */
-  modelThumb(obj, rarity = 'rare') {
+  modelThumb(obj, rarity = 'rare', turn = -0.7) {
     const r = this.renderer, tw = 216, th = 252, R = RARITY[rarity] || RARITY.rare;
     const sc = new THREE.Scene(); sc.environment = this.scene.environment;
     sc.background = canvasTex(256, 300, (q, w, h) => { const gr = q.createRadialGradient(w / 2, h * 0.42, 10, w / 2, h * 0.5, h * 0.8); gr.addColorStop(0, R.bg[0]); gr.addColorStop(1, R.bg[1]); q.fillStyle = gr; q.fillRect(0, 0, w, h); });
     sc.add(new THREE.HemisphereLight('#ffffff', '#334', 1.4)); const k = new THREE.DirectionalLight('#fff', 2.4); k.position.set(2, 3, 3); sc.add(k);
-    const o = this.fitObject(obj.clone(true), 1.0); o.rotation.y = -0.7; sc.add(o);
+    const o = this.fitObject(obj.clone(true), 1.0); o.rotation.y = turn; sc.add(o);
     const box = new THREE.Box3().setFromObject(o), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()).length();
     const cam = new THREE.PerspectiveCamera(30, tw / th, 0.01, 50); cam.position.set(c.x + size * 0.55, c.y + size * 0.45, c.z + size * 1.6); cam.lookAt(c);
     const rt = new THREE.WebGLRenderTarget(tw * 2, th * 2, { samples: 4 }); rt.texture.colorSpace = THREE.SRGBColorSpace;
@@ -655,6 +660,11 @@ export class SkinScreen {
   item(id) { return this.items.find((x) => x.id === id); }
   slabCardHtml(it) {
     const R = RARITY[it.rarity] || RARITY.common;
+    if (it.kind === 'raffle' && (it.mthumb || it.modelLoading)) {   // a live raffle with a 3D model (uploaded GLB or the booster pack)
+      return `<button class="sk-card gear-card raffle-card ${it.entered ? 'in' : ''}" data-skin="${it.id}" style="--rc:${it.vault === 'wano' ? '#ff5a3d' : '#ffcb05'};--rb0:${R.bg[0]};--rb1:${R.bg[1]}">
+        <span class="art">${it.mthumb ? `<img alt="" src="${it.mthumb}">` : '<i class="rf-load">LOADING…</i>'}<em class="rf-v">${it.vault === 'wano' ? 'WANO' : 'KANTO'}</em>${it.entered ? '<em class="rf-in">ENTERED ✓</em>' : ''}</span>
+        <b>${esc(it.name)}</b><small class="rar rf-cd" data-until="${it.until}">${countdown(it.until - Date.now())}</small><small class="selt">SELECTED</small></button>`;
+    }
     if (it.kind === 'raffle') {   // a live raffle: the prize slab, its vault, a countdown and whether you're in
       const lbl = `<span class="sl-lbl ${it.grade.co === 'BVG' ? 'bvg' : ''}"><i>${esc(it.grade.co)}</i><em>${esc(it.name)}</em><b>${esc(it.grade.n)}</b></span>`;
       return `<button class="sk-card slab-card raffle-card ${it.entered ? 'in' : ''}" data-skin="${it.id}" style="--rc:${it.vault === 'wano' ? '#ff5a3d' : '#ffcb05'};--rb0:${R.bg[0]};--rb1:${R.bg[1]}">
@@ -699,6 +709,13 @@ export class SkinScreen {
     else use.hidden = true;
     const stage = this.$('sk-stage'); stage.classList.remove('nomodel'); stage.dataset.lock = '';
     stage.classList.toggle('lockedslab', !it.owned);
+    if (it.kind === 'raffle' && (it.object || it.modelLoading)) {   // the raffle's GLB turns on the stand
+      if (this.slab) { this.stand.remove(this.slab); if (!this.slab.userData.gear) this.slab.userData.dispose?.(); }
+      this.slab = null;
+      if (it.object) { const g = this.fitObject(it.object.clone(true), 1.55); g.userData.gear = true; this.slab = g; this.stand.add(g); this.pop = 0; }
+      else { stage.classList.add('nomodel'); stage.dataset.lock = 'LOADING MODEL…'; }
+      return;
+    }
     if (it.kind === 'gear') {
       if (this.slab) { this.stand.remove(this.slab); if (!this.slab.userData.gear) this.slab.userData.dispose?.(); }
       this.slab = null;

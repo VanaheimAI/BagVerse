@@ -742,6 +742,8 @@ body.touch #skins .sk-use, body.touch #skins .sk-stats { display: none; }
 #skins.collection .sk-filters button { font-size: 14px; letter-spacing: .5px; white-space: nowrap; }
 body.touch #skins.collection .sk-filters button { font-size: 11.5px; letter-spacing: .3px; }
 #skins .raffle-card.in .rf-v { bottom: 26px; }
+#skins .raffle-card .art { position: relative; }
+#skins .raffle-card .rf-load { position: absolute; inset: 0; display: grid; place-items: center; font: 700 11px "Rajdhani", sans-serif; letter-spacing: 1px; color: #8796a8; font-style: normal; }
 body.touch #skins.collection .slab-card { width: calc(var(--cw) * .85); }
 @supports (width: 1cqh) { body.touch #skins.collection .slab-card { width: calc((100cqh - 46px) * .62); } }
 
