@@ -38,6 +38,9 @@ import { Wallet, short as shortAddr, MOBILE as WALLET_MOBILE } from './wallet.js
 import { NFT_GATES, gateFor } from './nft-gates.js';
 import { Raffles, countdown } from './raffles.js';
 import { fx } from './fx.js';
+import QRCode from 'qrcode';
+import { TREASURY, AD_DAYS, adPrice } from './treasury.js';
+import { session } from './net.js';
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 const $ = (id) => document.getElementById(id);
@@ -821,6 +824,49 @@ function mapMarks() {
   return m.concat(mp.marks());
 }
 
+// ---------------------------------------------------------------- billboard rentals (Solana Pay, USDC to the treasury)
+const liveAds = new Map();   // slot -> { creative_url, ends_at }
+async function loadLiveAds() {
+  try {
+    const r = await fetch('/api/ads?op=live'); if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) return;
+    const { live } = await r.json(); liveAds.clear();
+    for (const a of live || []) { liveAds.set(+a.slot.replace(/\D/g, '') || a.slot, a); world.setCreative?.(+a.slot.replace(/\D/g, '') || a.slot, a.creative_url); }
+  } catch (_) {}
+}
+loadLiveAds(); setInterval(loadLiveAds, 5 * 60e3);
+function openAdSlot(bb, price, live) {
+  const u = bb.userData, slot = bb.name, label = `SCREEN ${bb.name.replace('_', ' #')}`;
+  hud.modal(label, `
+    <div class="row"><span>Tier</span><b>${u.tier.toUpperCase()}</b></div>
+    <div class="row"><span>Format</span><b>${u.aspect || '16:9'} · image</b></div>
+    <div class="row"><span>Price</span><b>${price} USDC · ${AD_DAYS} days</b></div>
+    <div class="row"><span>Status</span><b style="color:${live ? '#ffc83d' : '#7cff3d'}">${live ? `RENTED UNTIL ${new Date(live.ends_at).toUTCString().slice(5, 16).toUpperCase()}` : 'AVAILABLE'}</b></div>
+    ${live ? '' : `<p style="opacity:.8">Pay with any Solana wallet (Solana Pay, USDC). Payment goes to the BagVerse treasury <span class="wl-addr">${shortAddr(TREASURY)}</span>. After it confirms, the team puts your image on this screen for ${AD_DAYS} days.</p>
+    <div id="adpay"><button id="adbook">RENT · PAY ${price} USDC</button></div><p class="wl-err" id="aderr" hidden></p>`}`);
+  const err = (m) => { const e = $('aderr'); if (e) { e.textContent = m; e.hidden = !m; } };
+  const btn = $('adbook'); if (!btn) return;
+  btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = 'PREPARING…'; err('');
+    try {
+      const ses = await session().catch(() => null);
+      const r = await fetch('/api/ads?op=book', { method: 'POST', headers: { 'content-type': 'application/json', ...(ses ? { authorization: 'Bearer ' + ses.token } : {}) }, body: JSON.stringify({ slot, tier: u.tier, name: progress.s.name }) });
+      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Bookings are not available right now.');
+      const qr = await QRCode.toDataURL(j.url, { margin: 1, width: 320, color: { dark: '#0b0618', light: '#ffffff' } });
+      $('adpay').innerHTML = `<div class="adqr"><img src="${qr}" alt="Solana Pay QR code"><div>
+        <p><b>Scan with your wallet app</b>, or open it in a wallet on this device.</p>
+        <div class="row"><span>Amount</span><b>${j.amount} USDC</b></div><div class="row"><span>Booking</span><b class="wl-addr">${j.id}</b></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><a class="wl-btn" href="${j.url}">OPEN IN WALLET</a><button id="adcheck">I'VE PAID · CHECK</button></div></div></div>`;
+      $('adcheck').onclick = async () => {
+        const c = $('adcheck'); c.disabled = true; c.textContent = 'CHECKING…'; err('');
+        try { const q = await fetch('/api/ads?op=check', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: j.id }) }); const k = await q.json();
+          if (k.paid) { sfx.play('achieve'); $('adpay').innerHTML = `<p style="color:#7cff3d;font-weight:700">PAYMENT RECEIVED ✓ Booking ${j.id}. The team will put your ad live on this screen shortly.</p>`; hud.toast('AD SCREEN BOOKED'); }
+          else { c.disabled = false; c.textContent = "I'VE PAID · CHECK"; err(k.error || 'Payment not found yet. It can take a few seconds after you approve it.'); } }
+        catch (_) { c.disabled = false; c.textContent = "I'VE PAID · CHECK"; err('Network error. Try again.'); }
+      };
+    } catch (e) { btn.disabled = false; btn.textContent = `RENT · PAY ${price} USDC`; err(e.message); }
+  };
+}
+
 // ---------------------------------------------------------------- vaults (raffles)
 const raffles = new Raffles();
 const escR = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -960,15 +1006,9 @@ function interactions(dt) {
       }
     } else { watchT = Math.max(0, watchT - dt * 2); if (!watchT) hud.watch(null); else hud.watch(watchT / 10); }
     if (!promptHtml && bestD < 10 && u.tier !== 'hero') {
-      promptHtml = u.open ? `<kbd>E</kbd> RENT THIS SCREEN · $250 / 7 DAYS` : '<kbd>E</kbd> VIEW AD SLOT';
-      action = () => hud.modal(`SCREEN ${bestBB.name.replace('_', ' #')}`, `
-        <div class="row"><span>Tier</span><b>${u.tier.toUpperCase()}</b></div>
-        <div class="row"><span>Format</span><b>${bestBB.userData.aspect || '16:9'} · image / MP4 / WebM</b></div>
-        <div class="row"><span>Price</span><b>250 USDC · 7 days</b></div>
-        <div class="row"><span>Status</span><b style="color:${u.open ? '#7cff3d' : '#ffc83d'}">${u.open ? 'AVAILABLE' : 'LEASED (DEMO)'}</b></div>
-        <p style="opacity:.75">Self-serve rentals via Solana Pay + Billboard Lease NFT come with the blockchain phase.</p>
-        ${wallet.address ? `<p style="opacity:.75">Wallet ${shortAddr(wallet.address)} is linked and will pay for rentals when they open.</p>` : '<button data-w="link">CONNECT WALLET</button>'}`);
-      setTimeout(() => { const b = document.querySelector('[data-w=link]'); if (b) b.onclick = () => openWallet(); });
+      const live = liveAds.get(u.slot), price = adPrice(u.tier);
+      promptHtml = live ? '<kbd>E</kbd> AD SLOT · RENTED' : u.open ? `<kbd>E</kbd> RENT THIS SCREEN · ${price} USDC / ${AD_DAYS} DAYS` : '<kbd>E</kbd> VIEW AD SLOT';
+      action = () => openAdSlot(bestBB, price, live);
     }
   }
   // vaults: Wano (graded One Piece raffles) and Kanto (graded Pokemon raffles); prompt at each door
@@ -1014,10 +1054,12 @@ const skins = new SkinScreen({
   onEquip: (id) => { if (id !== charId) { pickChar(id); hud.toast?.(`SKIN EQUIPPED · ${id.toUpperCase()}`); sfx.play('whoosh'); quests.emit('skin', 1, { id }); } },
   onClose: () => { $('hud').hidden = false; start(); },
   transition: (fn) => fx.through(fn, 220, 450),
-  getCards: () => collectionCards(),
+  getLoot: () => collectionLoot(),
+  getGear: () => collectionGear(),
   getStats: () => { const s = progress.s, rw = raffles.list.filter((r) => r.winner_user && r.winner_user === raffles.uid).length;
-    return [['LEVEL', s.level], ['PLAYTIME', `${s.playMin | 0}m`], ['RAFFLE WINS', rw], ['BAG RUN PB', (s.mg?.bagrun?.best | 0).toLocaleString()], ['TILE WINS', tileDrop.S.wins]]; },
+    return [['LEVEL', s.level], ['PLAYTIME', `${s.playMin | 0}m`], ['RAFFLE WINS', rw], ['TILE WINS', tileDrop.S.wins]]; },
   onUse: (it) => {
+    if (it.kind === 'gear' && it.id === 'gear:punk') { skins.close(); setTimeout(() => summonScooter('punk'), 700); return; }
     if (it.url) { window.open(it.url, '_blank', 'noopener'); return; }
     skins.toast(it.vault === 'wano' ? 'ENTER FREE AT THE WANO VAULT (EAST OF THE PLAZA) WITH A VERIFIED WALLET' : 'ENTER FREE AT THE KANTO VAULT (BULL RUN) WITH A VERIFIED WALLET');
   },
@@ -1030,22 +1072,45 @@ function cardArt(vault) {
   g.font = '800 170px Rajdhani, sans-serif'; g.fillText('?', 150, 250); g.font = '700 30px Rajdhani, sans-serif'; g.fillText('PRIZE TBA', 150, 330);
   return c.toDataURL('image/png');
 }
-function collectionCards() {
-  const out = [], seen = new Set();
+function collectionLoot() {   // graded cards this player won in vault raffles
+  const out = [];
   for (const r of raffles.list) {
-    const mine = !!r.winner_user && r.winner_user === raffles.uid;
-    if (!mine && r.status !== 'open') continue;
+    if (!r.winner_user || r.winner_user !== raffles.uid) continue;
     const pz = r.prize || {}, local = RWA_ASSETS.find((a) => a.mint && a.mint === pz.mint), V = r.vault === 'wano' ? 'Wano' : 'Kanto';
-    if (local) seen.add(local.mint);
     out.push({ id: 'card:' + r.id, vault: r.vault, name: pz.name || 'Graded card', sub: pz.set || (r.vault === 'wano' ? 'Graded One Piece card' : 'Graded Pokémon card'),
-      cert: pz.cert ? `${pz.grader || ''} #${pz.cert}` : '', grade: { co: pz.grader || 'TBA', n: pz.grade || '?', word: pz.grade === '10' ? 'GEM MINT' : pz.grade ? 'GRADED' : 'TBA' },
-      img: local?.photo || cardArt(r.vault), slabPhoto: !!local?.photo, owned: mine, url: /^https:\/\//.test(pz.url || '') ? pz.url : null,
-      lock: mine ? null : `${V} Vault raffle prize · draw ${new Date(r.draws_at).toUTCString().slice(0, 22)} UTC`,
-      desc: mine ? 'You won this slab in the vault raffle. The team sends it to your verified wallet.' : `A real graded card in the ${V} Vault raffle. Entry is free with a verified wallet.` });
+      cert: pz.cert ? `${pz.grader || ''} #${pz.cert}` : '', grade: { co: pz.grader || 'BVG', n: pz.grade || '?', word: pz.grade === '10' ? 'GEM MINT' : 'GRADED' },
+      img: local?.photo || (/^https:\/\//.test(pz.image || '') ? pz.image : cardArt(r.vault)), slabPhoto: !!local?.photo, owned: true, url: /^https:\/\//.test(pz.url || '') ? pz.url : null,
+      desc: `Won in the ${V} Vault raffle (${new Date(r.draws_at).toUTCString().slice(5, 16)}). The team sends it to your verified wallet.` });
   }
-  for (const a of RWA_ASSETS) if (!seen.has(a.mint)) out.push({ id: 'card:' + a.mint, vault: 'wano', name: a.name, sub: `${a.set} #${a.number}`, cert: `${a.grader} #${a.cert}`,
-    grade: { co: a.grader, n: a.grade, word: 'GEM MINT' }, img: a.photo, slabPhoto: true, owned: false, url: a.url, lock: 'Wano Vault raffle prize', desc: `Real ${a.grader} ${a.grade} slab vaulted on Solana by ${a.issuer}. Raffled at the Wano Vault.` });
   return out;
+}
+function gearArt(kind) {   // card art for gear that has no model yet
+  const c = document.createElement('canvas'); c.width = 300; c.height = 350; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(150, 160, 10, 150, 175, 220); gr.addColorStop(0, kind === 'hover' ? '#14345e' : '#4a2210'); gr.addColorStop(1, '#070a12');
+  g.fillStyle = gr; g.fillRect(0, 0, 300, 350); g.lineJoin = 'round';
+  if (kind === 'hover') {
+    g.fillStyle = 'rgba(61,255,240,.25)'; g.beginPath(); g.ellipse(150, 250, 110, 18, 0, 0, 6.28); g.fill();
+    g.fillStyle = '#1b2433'; g.strokeStyle = '#3dfff0'; g.lineWidth = 5; g.beginPath(); g.roundRect(40, 170, 220, 46, 23); g.fill(); g.stroke();
+    g.fillStyle = '#3dfff0'; for (const x of [85, 215]) { g.beginPath(); g.ellipse(x, 222, 26, 8, 0, 0, 6.28); g.fill(); }
+  } else {
+    g.fillStyle = '#ff8a3d'; for (const x of [112, 188]) { g.beginPath(); g.moveTo(x - 16, 236); g.lineTo(x, 300); g.lineTo(x + 16, 236); g.fill(); }
+    g.fillStyle = '#2a3140'; g.strokeStyle = '#ffc83d'; g.lineWidth = 5;
+    for (const x of [112, 188]) { g.beginPath(); g.roundRect(x - 26, 100, 52, 140, 22); g.fill(); g.stroke(); }
+    g.beginPath(); g.roundRect(128, 120, 44, 90, 10); g.fill(); g.stroke();
+  }
+  g.fillStyle = 'rgba(255,255,255,.85)'; g.textAlign = 'center'; g.font = '700 26px Rajdhani, sans-serif'; g.fillText('COMING SOON', 150, 60);
+  return c.toDataURL('image/png');
+}
+function collectionGear() {   // rides: the scooter (in 3D) and what's coming
+  const s = progress.s;
+  return [
+    { id: 'gear:punk', name: 'PUNK SCOOTER', sub: 'Electric street scooter', rarity: 'epic', owned: s.vehicles.includes('punk'), object: scooterGltf?.scene || null, action: 'RIDE IT',
+      desc: 'Graffiti-deck electric scooter. Summon it anywhere with R and carve through the districts.' },
+    { id: 'gear:hoverboard', name: 'HOVERBOARD', sub: 'Mag-lev board', rarity: 'legendary', owned: false, img: gearArt('hover'),
+      desc: 'Floats a hand above the street and grinds rails. Coming to the garage soon.' },
+    { id: 'gear:jetpack', name: 'JETPACK', sub: 'Twin-thruster pack', rarity: 'legendary', owned: false, img: gearArt('jet'),
+      desc: 'Short hops over rooftops and the plaza. Coming to the garage soon.' },
+  ];
 }
 const openCollection = () => {
   if (skins.isOpen || inGame()) return;

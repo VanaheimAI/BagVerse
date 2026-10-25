@@ -671,3 +671,24 @@ Players "losing" each other came from going over Supabase Realtime's Free-plan l
 - counts a player as **here while presence lists them or they were heard in the last 15 s**, so a dropped presence update never hides someone who is still playing, and a newcomer appears from their first message;
 - sends velocity with each move; other screens keep a player gliding along it for up to 1.5 s, so slower update rates in a big room still look smooth.
 `window.__rtStats()` shows messages sent/received and the current movement rate. Test: `tools/mp_persist_test.mjs` (3 players on the fake client, one with every presence call dropped).
+
+## Collection = Loot + Gear (Oct 25)
+The Collection screen (I) no longer lists skins (those stay on the skin screen, K). It shows:
+- **LOOT:** graded cards the player won in vault raffles, as slabs (real grader label + the slab photo, or the prize image from the raffle). Empty until you win one.
+- **GEAR:** rides, shown in 3D on the pedestal: the **Punk Scooter** (owned; RIDE IT summons it), plus **Hoverboard** and **Jetpack** cards marked Coming Soon.
+- Filters: ALL / LOOT / GEAR / FAVORITES. Stats: loot, gear, level, playtime, raffle wins, Tile Drop wins.
+
+## Admin dashboard: /admin (Oct 25)
+`admin.html` + `src/admin/` (built as a second Vite page; `/admin` rewrites to it on Vercel). Server: `api/admin.js` (one function, `?op=`).
+- **Sign-in:** connect the admin wallet (`ADMIN_WALLET` in `src/treasury.js`: `APxghrmorSFNhnRUbgL11x5DUPnagYUDbK9be2b5ZCQV`; the server can override it with an `ADMIN_WALLET` env var) and sign a short message. The server checks the signature, the site domain and freshness (5 min), then issues a 12 h token (HMAC with `ADMIN_SECRET`, or the service-role key). Every other op needs the token.
+- **Raffles:** create / edit (while open) with vault, prize name, set, grader, grade, variant, cert, mint, card link, image (upload: resized to WebP in the browser, stored in the public Supabase Storage bucket `prizes`, created on first upload), level gate (defaults Wano 25 / Kanto 100) and draw time (your local time, shown in UTC). Cancel, or reopen a drawn/cancelled raffle with a new time.
+- **Entries & winners:** every entry with player name, wallet (Solscan link), level and time. **Make winner** sets a winner by hand (proof `manual`, signed-in admin wallet recorded); **Fair draw now** runs the normal block-hash draw immediately. The winner sees the "YOU WON" pop-up and the slab in their Collection.
+- **Players:** everyone with a leaderboard row or verified wallet: name, level, skin, wallet, raffle entries and wins, Bag Run best, race wins, last active. Search, sort, CSV export.
+- **Ads:** billboard bookings (below): check payment on-chain, upload the advertiser's image, go live (7 days), end or cancel.
+
+## Billboard ads paid to the treasury (Oct 25)
+- `src/treasury.js`: `TREASURY` (`APxghrmorSFNhnRUbgL11x5DUPnagYUDbK9be2b5ZCQV`) receives ad payments; prices per 7 days by screen tier (`adPrice`: totem 120, canyon / gantry 250, spire / podium 300, tower 400 USDC).
+- In game, E at a screen shows price and status; **RENT · PAY** creates a pending booking (`/api/ads?op=book`) and shows a **Solana Pay** QR code and an "Open in wallet" link (USDC transfer to the treasury with a unique reference key). **I'VE PAID · CHECK** (`op=check`) finds the transaction by its reference and confirms at least the price arrived in the treasury's USDC account.
+- The admin adds the creative and sets the booking live; the game loads live ads (`op=live`, every 5 min) and shows the image on that screen (`World.setCreative`).
+- Payment checks need `SOLANA_RPC_URL`. Table `ad_bookings` in `supabase/schema.sql`.
+- Tests: `node tools/api_admin_test.mjs` (sign-in rules, raffles, manual winner, players, bookings and payment checks on a fake chain), `tools/admin_test.mjs` (the dashboard in a browser on `tools/wallet_server.mjs`).

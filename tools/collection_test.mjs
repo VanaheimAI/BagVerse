@@ -11,16 +11,15 @@ for (const [tag, opts] of [['desk', { viewport: { width: 1376, height: 768 } }],
   if (tag === 'desk') { await p.keyboard.press('KeyI'); } else await p.evaluate(() => window.__bagverse.openCollection());
   await frames(3);
   console.log(tag, 'open:', await p.evaluate(() => window.__bagverse.skins.isOpen + ' ' + window.__bagverse.skins.mode), '| title:', await p.textContent('#sk-h1'), '| items:', await p.evaluate(() => window.__bagverse.skins.items.map((x) => x.id + (x.owned ? '' : '(locked)')).join(' ')));
-  await p.evaluate(() => { const S = window.__bagverse.skins; S.select(S.items.find((x) => x.kind === 'card').id); }); await frames(8);
+  await p.evaluate(() => { const S = window.__bagverse.skins; S.select('gear:punk'); }); await frames(8);
   console.log(tag, 'card:', await p.textContent('#sk-name'), '|', await p.textContent('#sk-pill'), '| use:', await p.textContent('#sk-use'), '| stats:', await p.evaluate(() => document.getElementById('sk-stats').textContent));
   await p.screenshot({ path: `/tmp/claude-0/col_${tag}_card.png`, timeout: 600000 });
-  await p.evaluate(() => { const S = window.__bagverse.skins; S.select('skin:kaizokuguy'); }); await frames(8);
+  await p.evaluate(() => { const S = window.__bagverse.skins; S.select('gear:hoverboard'); }); await frames(8);
   await p.screenshot({ path: `/tmp/claude-0/col_${tag}_skin.png`, timeout: 600000 });
   if (tag === 'desk') {
     await p.click('#sk-equip'); await frames(12); console.log('view slab ->', await p.textContent('#sk-equip'));
     await p.screenshot({ path: '/tmp/claude-0/col_desk_zoom.png', timeout: 600000 });
-    await p.click('#sk-use'); await frames(3); console.log('equip from collection -> charId', await p.evaluate(() => window.__bagverse.skins.getEquipped()));
-    await p.click('[data-f="cards"]'); await frames(2); console.log('cards filter visible:', await p.evaluate(() => [...document.querySelectorAll('.sk-card:not([hidden])')].map((c) => c.dataset.skin).join(' ')));
+    await p.click('[data-f="loot"]'); await frames(2); console.log('cards filter visible:', await p.evaluate(() => [...document.querySelectorAll('.sk-card:not([hidden])')].map((c) => c.dataset.skin).join(' ')));
     await p.click('#sk-back'); await frames(3); console.log('closed:', !(await p.evaluate(() => window.__bagverse.skins.isOpen)), 'hud shown:', await p.evaluate(() => !document.getElementById('hud').hidden));
     // skin screen still the skin screen
     await p.keyboard.press('KeyK'); await frames(3); console.log('K ->', await p.textContent('#sk-h1'), await p.evaluate(() => document.querySelectorAll('#sk-grid .sk-card:not(.slab-card)').length + ' skin cards'));

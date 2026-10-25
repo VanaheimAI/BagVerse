@@ -3,6 +3,7 @@
 // node tools/wallet_server.mjs <distDir> <port>
 //   GET  /__fake/t/<table>          rows of a server table (the fake browser client reads through this)
 //   POST /__fake/t/<table>          replace a table's rows (tests seed raffles this way)
+//   POST /__fake/env               set server env vars (ADMIN_WALLET for the admin page test)
 //   POST /__fake/owned              { "<address>": [DAS asset, ...] } what each wallet holds
 import http from 'node:http';
 import fs from 'node:fs';
@@ -11,18 +12,22 @@ import verify from '../api/wallet/verify.js';
 import holdings from '../api/wallet/holdings.js';
 import enter from '../api/raffle/enter.js';
 import draw from '../api/raffle/draw.js';
+import adminApi from '../api/admin.js';
+import adsApi from '../api/ads.js';
 import { fakeAdmin } from './fake-admin.mjs';
 
 const [dist = '/tmp/dist-fake', port = 4175] = process.argv.slice(2);
 const sb = fakeAdmin(); let owned = {};
 const das = async (_u, { body }) => ({ json: async () => ({ result: { items: owned[JSON.parse(body).params.ownerAddress] || [] } }) });
 const deps = { sb, holdings: { rpc: 'fake', fetchFn: das }, rpc: '' };
-const routes = { '/api/wallet/verify': verify, '/api/wallet/holdings': holdings, '/api/raffle/enter': enter, '/api/raffle/draw': draw };
+const routes = { '/api/wallet/verify': verify, '/api/wallet/holdings': holdings, '/api/raffle/enter': enter, '/api/raffle/draw': draw, '/api/admin': adminApi, '/api/ads': adsApi };
+process.env.ADMIN_SECRET ||= 'test-secret';
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png', '.glb': 'model/gltf-binary', '.mp3': 'audio/mpeg', '.woff2': 'font/woff2', '.woff': 'font/woff', '.svg': 'image/svg+xml', '.txt': 'text/plain', '.wasm': 'application/wasm', '.ico': 'image/x-icon' };
 const body = (req) => new Promise((r) => { let s = ''; req.on('data', (c) => (s += c)); req.on('end', () => { try { r(JSON.parse(s || '{}')); } catch (_) { r({}); } }); });
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
-  if (routes[u.pathname]) { req.body = await body(req); return routes[u.pathname](req, res, deps); }
+  if (routes[u.pathname]) { req.body = req.method === 'POST' ? await body(req) : {}; return routes[u.pathname](req, res, deps); }
+  if (u.pathname === '/__fake/env') { Object.assign(process.env, await body(req)); return res.end('{}'); }   // tests: e.g. ADMIN_WALLET = the fake wallet's address
   const t = /^\/__fake\/t\/(\w+)(\/delete)?$/.exec(u.pathname);
   if (t) {
     const rows = (sb.db[t[1]] ||= []);

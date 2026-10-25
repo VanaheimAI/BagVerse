@@ -81,6 +81,6 @@ export function makeSlab(item, img) {
 /** load an image (data URL / bundled URL) once */
 const cache = new Map();
 export function loadImage(src) {
-  if (!cache.has(src)) cache.set(src, new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }));
+  if (!cache.has(src)) cache.set(src, new Promise((res, rej) => { const i = new Image(); if (/^https?:/.test(src)) i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; }));
   return cache.get(src);
 }

@@ -66,7 +66,7 @@ export const send = (res, status, body) => { res.statusCode = status; res.setHea
 export const readBody = async (req) => {
   if (req.body && typeof req.body === 'object') return req.body;
   if (typeof req.body === 'string') { try { return JSON.parse(req.body); } catch (_) { return {}; } }
-  let s = ''; for await (const c of req) { s += c; if (s.length > 8000) break; }
+  let s = ''; for await (const c of req) { s += c; if (s.length > 6e6) break; }
   try { return JSON.parse(s || '{}'); } catch (_) { return {}; }
 };
 

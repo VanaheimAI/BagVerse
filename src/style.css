@@ -746,3 +746,8 @@ body.touch #skins.collection .slab-card { width: calc(var(--cw) * .85); }
 body.touch #skins .sk-pill .pl-r { display: none; }
 body.touch #skins .sl-lbl em { display: none; }
 body.touch #skins .sl-lbl { justify-content: space-between; }
+
+/* ===== billboard rental: Solana Pay QR ===== */
+.adqr { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; margin-top: 8px; }
+.adqr img { width: 160px; height: 160px; border-radius: 10px; background: #fff; padding: 6px; }
+.adqr > div { flex: 1; min-width: 200px; }

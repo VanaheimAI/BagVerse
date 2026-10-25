@@ -105,8 +105,8 @@ export class SkinScreen {
    * getName(): current player name · needName(): true until the player has chosen one · setName(name)
    */
   /** chars: loaded gltfs by id (filled in as skins load) · loadChar(id): Promise<gltf> · allIds: every skin with a model */
-  constructor({ renderer, chars, loadChar, allIds, platform, getEquipped, onEquip, onClose, getLevel, getName, needName, setName, getCards, getStats, transition, onMarket, onUse }) {
-    Object.assign(this, { renderer, chars, loadChar, allIds, getEquipped, onEquip, onClose, getLevel, getName, needName, setName, getCards, getStats, onMarket, onUse });
+  constructor({ renderer, chars, loadChar, allIds, platform, getEquipped, onEquip, onClose, getLevel, getName, needName, setName, getLoot, getGear, getStats, transition, onMarket, onUse }) {
+    Object.assign(this, { renderer, chars, loadChar, allIds, getEquipped, onEquip, onClose, getLevel, getName, needName, setName, getLoot, getGear, getStats, onMarket, onUse });
     this.transition = transition || ((fn) => fn());
     this.mode = 'skins'; this.items = [];
     this.platformGltf = platform;
@@ -469,7 +469,7 @@ export class SkinScreen {
   }
   unlocked(s) { return s.owned || (s.level != null && this.getLevel() >= s.level); }
   visibleSkins() {
-    if (this.mode === 'collection') return this.items.filter((it) => this.filter === 'all' || (this.filter === 'owned' && it.owned) || (this.filter === 'cards' && it.kind === 'card') || (this.filter === 'favorites' && this.favs.has(it.id)));
+    if (this.mode === 'collection') return this.items.filter((it) => this.filter === 'all' || (this.filter === 'loot' && it.kind === 'card') || (this.filter === 'gear' && it.kind === 'gear') || (this.filter === 'favorites' && this.favs.has(it.id)));
     return SKINS.filter((s) => this.filter === 'all' || (this.filter === 'owned' && s.owned)
       || (this.filter === 'unlocked' && this.unlocked(s)) || (this.filter === 'favorites' && this.favs.has(s.id)));
   }
@@ -480,7 +480,7 @@ export class SkinScreen {
     const vis = new Set(this.visibleSkins().map((s) => s.id));
     this.el.querySelectorAll('.sk-card').forEach((c) => { c.hidden = !vis.has(c.dataset.skin); });
     this.$('sk-grid').classList.toggle('empty', vis.size === 0);
-    this.$('sk-grid').dataset.empty = f === 'favorites' ? 'Tap ★ FAVORITE on an item to pin it here' : f === 'cards' ? 'No cards yet. Win one in the Wano or Kanto Vault raffles.' : 'Nothing here yet';
+    this.$('sk-grid').dataset.empty = f === 'favorites' ? 'Tap ★ FAVORITE on an item to pin it here' : f === 'loot' ? 'No loot yet. Win graded cards in the Wano and Kanto Vault raffles.' : 'Nothing here yet';
   }
 
   select(id) {
@@ -561,7 +561,7 @@ export class SkinScreen {
   }
 
   equip() {
-    if (this.mode === 'collection') { this.setZoom(this.zoomT > 1.3 ? 1 : 2.1); this.$('sk-equip').textContent = this.zoomT > 1.3 ? 'BACK TO STAND' : 'VIEW SLAB'; return; }
+    if (this.mode === 'collection') { this.setZoom(this.zoomT > 1.3 ? 1 : 2.1); this.$('sk-equip').textContent = this.zoomT > 1.3 ? 'BACK TO STAND' : this.item(this.sel)?.kind === 'gear' ? 'VIEW GEAR' : 'VIEW SLAB'; return; }
     if (!this.commitName()) return;
     const s = this.skin(this.sel);
     if (s && !s.owned && s.gate) { this.toast(String(s.lock).toUpperCase()); this.onGate?.(s); return; }
@@ -578,13 +578,13 @@ export class SkinScreen {
     this.el.classList.toggle('collection', col);
     this.$('sk-h1').textContent = col ? 'COLLECTION' : 'SKIN SELECTION';
     this.$('sk-k1').textContent = col ? 'ITEM INFO' : 'SKIN INFO';
-    this.$('sk-ptitle').textContent = col ? 'SELECT SLAB' : 'SELECT SKIN';
+    this.$('sk-ptitle').textContent = col ? 'SELECT ITEM' : 'SELECT SKIN';
     this.$('sk-shop').textContent = col ? 'MARKET' : 'SHOP';
     this.$('sk-filters').innerHTML = col
-      ? '<button data-f="all">ALL</button><button data-f="owned">OWNED</button><button data-f="cards">CARDS</button><button data-f="favorites">FAVORITES</button>'
+      ? '<button data-f="all">ALL</button><button data-f="loot">LOOT</button><button data-f="gear">GEAR</button><button data-f="favorites">FAVORITES</button>'
       : '<button data-f="all">ALL</button><button data-f="owned">OWNED</button><button data-f="unlocked">UNLOCKED</button><button data-f="favorites">FAVORITES</button>';
-    if (col && this.filter === 'unlocked') this.filter = 'all';
-    if (!col && this.filter === 'cards') this.filter = 'all';
+    if (col && !['all', 'loot', 'gear', 'favorites'].includes(this.filter)) this.filter = 'all';
+    if (!col && !['all', 'owned', 'unlocked', 'favorites'].includes(this.filter)) this.filter = 'all';
     this.$('sk-use').hidden = !col; this.$('sk-stats').hidden = !col;
     this.stand.clear(); this.shown = undefined; this.slab = null;
     if (col) {
@@ -596,19 +596,47 @@ export class SkinScreen {
       this.useThumbs(Object.keys(this.thumbs).length ? this.thumbs : { ...THUMBS, ...ART });
     }
   }
+  /** Collection = LOOT (graded cards won in raffles, as slabs) + GEAR (rides: scooters, hoverboards, jetpacks, in 3D) */
   collectionItems() {
-    const skins = SKINS.filter((x) => x.owned || x.gate).map((x) => {
-      const R = RARITY[x.rarity], gr = SKIN_GRADE[x.rarity] || SKIN_GRADE.common;
-      return { id: 'skin:' + x.id, kind: 'skin', skin: x.id, name: x.name, sub: `BagVerse Skin · ${R.label}`, rarity: x.rarity, color: R.color,
-        cert: 'BV-' + [...x.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7).toString().slice(-8).padStart(8, '0'),
-        grade: { co: 'BVG', ...gr }, img: ART[x.id] || this.thumbs[x.id] || THUMBS[x.id], owned: !!x.owned, lock: x.owned ? null : x.lock, desc: x.desc, boosts: x.boosts };
-    });
-    const cards = (this.getCards?.() || []).map((c) => ({ kind: 'card', rarity: 'legendary', color: RARITY.legendary.color, ...c }));
-    return [...cards.filter((c) => c.owned), ...skins.filter((x) => x.owned), ...cards.filter((c) => !c.owned), ...skins.filter((x) => !x.owned)];
+    const loot = (this.getLoot?.() || []).map((c) => ({ kind: 'card', rarity: 'legendary', color: RARITY.legendary.color, ...c }));
+    const gear = (this.getGear?.() || []).map((g) => ({ kind: 'gear', grade: { co: 'GEAR', n: '', word: '' }, ...g }));
+    for (const g of gear) if (!g.img && g.object) g.img = this.modelThumb(g.object, g.rarity);
+    return [...loot, ...gear.filter((g) => g.owned), ...gear.filter((g) => !g.owned)];
+  }
+  /** a card portrait of a 3D object (3/4 view, rarity backdrop) as a data URL */
+  modelThumb(obj, rarity = 'rare') {
+    const r = this.renderer, tw = 216, th = 252, R = RARITY[rarity] || RARITY.rare;
+    const sc = new THREE.Scene(); sc.environment = this.scene.environment;
+    sc.background = canvasTex(256, 300, (q, w, h) => { const gr = q.createRadialGradient(w / 2, h * 0.42, 10, w / 2, h * 0.5, h * 0.8); gr.addColorStop(0, R.bg[0]); gr.addColorStop(1, R.bg[1]); q.fillStyle = gr; q.fillRect(0, 0, w, h); });
+    sc.add(new THREE.HemisphereLight('#ffffff', '#334', 1.4)); const k = new THREE.DirectionalLight('#fff', 2.4); k.position.set(2, 3, 3); sc.add(k);
+    const o = this.fitObject(obj.clone(true), 1.0); o.rotation.y = -0.7; sc.add(o);
+    const box = new THREE.Box3().setFromObject(o), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()).length();
+    const cam = new THREE.PerspectiveCamera(30, tw / th, 0.01, 50); cam.position.set(c.x + size * 0.55, c.y + size * 0.45, c.z + size * 1.6); cam.lookAt(c);
+    const rt = new THREE.WebGLRenderTarget(tw * 2, th * 2, { samples: 4 }); rt.texture.colorSpace = THREE.SRGBColorSpace;
+    const prevT = r.toneMapping, prevE = r.toneMappingExposure; r.toneMapping = THREE.NeutralToneMapping; r.toneMappingExposure = 1;
+    r.setRenderTarget(rt); r.clear(); r.render(sc, cam);
+    const px = new Uint8Array(tw * 2 * th * 2 * 4); r.readRenderTargetPixels(rt, 0, 0, tw * 2, th * 2, px); r.setRenderTarget(null);
+    r.toneMapping = prevT; r.toneMappingExposure = prevE; rt.dispose(); sc.background.dispose();
+    const cv = document.createElement('canvas'); cv.width = tw * 2; cv.height = th * 2; const g = cv.getContext('2d'), img = g.createImageData(tw * 2, th * 2);
+    for (let y = 0; y < th * 2; y++) img.data.set(px.subarray((th * 2 - 1 - y) * tw * 8, (th * 2 - y) * tw * 8), y * tw * 8);   // flip rows
+    g.putImageData(img, 0, 0);
+    return cv.toDataURL('image/webp', 0.86);
+  }
+  /** scale an object so its largest side is `size` m, base on y = 0, centred */
+  fitObject(o, size) {
+    o.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(o), dim = box.getSize(new THREE.Vector3()), k = size / Math.max(dim.x, dim.y, dim.z);
+    const g = new THREE.Group(); g.add(o); o.scale.multiplyScalar(k);
+    o.updateMatrixWorld(true); const b2 = new THREE.Box3().setFromObject(o), c = b2.getCenter(new THREE.Vector3());
+    o.position.x -= c.x; o.position.z -= c.z; o.position.y -= b2.min.y;
+    return g;
   }
   item(id) { return this.items.find((x) => x.id === id); }
   slabCardHtml(it) {
     const R = RARITY[it.rarity] || RARITY.common;
+    if (it.kind === 'gear') return `<button class="sk-card gear-card ${it.owned ? '' : 'locked'}" data-skin="${it.id}" style="--rc:${R.color};--rb0:${R.bg[0]};--rb1:${R.bg[1]}">
+      <span class="art"><img alt="" src="${it.img}">${it.owned ? '' : `<i class="lk">${LOCK}</i>`}</span>
+      <b>${it.name}</b><small class="rar">${it.owned ? 'GEAR · OWNED' : 'COMING SOON'}</small><small class="selt">SELECTED</small></button>`;
     const lbl = `<span class="sl-lbl ${it.grade.co === 'BVG' ? 'bvg' : ''}"><i>${it.grade.co}</i><em>${it.name}</em><b>${it.grade.n}</b></span>`;
     return `<button class="sk-card slab-card ${it.owned ? '' : 'locked'}" data-skin="${it.id}" style="--rc:${R.color};--rb0:${R.bg[0]};--rb1:${R.bg[1]}">
       <span class="art slab">${it.slabPhoto ? '' : lbl}<img alt="" src="${it.thumb || it.img}" class="${it.slabPhoto ? 'photo' : ''}">${it.owned ? '' : `<i class="lk">${LOCK}</i>`}<em class="eq">EQUIPPED</em></span>
@@ -616,32 +644,42 @@ export class SkinScreen {
   }
   renderStats() {
     const st = this.getStats?.() || [];
-    const owned = this.items.filter((x) => x.owned).length;
-    this.$('sk-stats').innerHTML = [['SLABS', `${owned} / ${this.items.length}`], ...st].map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('');
+    const loot = this.items.filter((x) => x.kind === 'card' && x.owned).length, gear = this.items.filter((x) => x.kind === 'gear' && x.owned).length;
+    this.$('sk-stats').innerHTML = [['LOOT', loot], ['GEAR', gear], ...st].map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('');
   }
   selectItem(id) {
     const it = this.item(id); if (!it) return;
     this.sel = id;
     const R = RARITY[it.rarity] || RARITY.common;
     this.$('sk-name').textContent = it.name;
-    const pill = this.$('sk-pill'); pill.innerHTML = `${it.grade.co} ${it.grade.n}<span class="pl-r"> ${`${it.grade.word} / ${R.label}`.toUpperCase()}</span>`; pill.style.setProperty('--rc', R.color);
+    const pill = this.$('sk-pill');
+    pill.innerHTML = it.kind === 'gear' ? `GEAR<span class="pl-r"> · ${it.owned ? 'OWNED' : 'COMING SOON'} / ${R.label.toUpperCase()}</span>` : `${it.grade.co} ${it.grade.n}<span class="pl-r"> ${`${it.grade.word} / ${R.label}`.toUpperCase()}</span>`;
+    pill.style.setProperty('--rc', R.color);
     this.$('sk-desc').textContent = it.owned ? it.desc : `${it.lock ? it.lock + '. ' : ''}${it.desc || ''}`;
     this.$('sk-icons').innerHTML = (it.boosts || []).map(([ic, label], i) => `<span class="${i === 0 ? 'on' : ''}" title="${label}">${ICONS[ic]}</span>`).join('');
     this.$('sk-fav').classList.toggle('on', this.favs.has(id));
     const eq = this.getEquipped();
     this.el.querySelectorAll('.sk-card').forEach((c) => { c.classList.toggle('sel', c.dataset.skin === id); c.classList.toggle('equipped', c.dataset.skin === 'skin:' + eq); });
     this.el.querySelector(`[data-skin="${id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
-    const btn = this.$('sk-equip'); btn.disabled = false; btn.textContent = this.zoomT > 1.3 ? 'BACK TO STAND' : 'VIEW SLAB';
+    const btn = this.$('sk-equip'); btn.disabled = false; btn.textContent = this.zoomT > 1.3 ? 'BACK TO STAND' : it.kind === 'gear' ? 'VIEW GEAR' : 'VIEW SLAB';
     const use = this.$('sk-use');
-    if (it.kind === 'skin' && it.owned) { use.hidden = false; use.disabled = it.skin === eq; use.textContent = it.skin === eq ? 'EQUIPPED ✓' : 'EQUIP THIS SKIN'; }
+    if (it.kind === 'gear') { use.hidden = !it.owned; use.disabled = false; use.textContent = it.action || 'RIDE IT'; }
+    else if (it.kind === 'skin' && it.owned) { use.hidden = false; use.disabled = it.skin === eq; use.textContent = it.skin === eq ? 'EQUIPPED ✓' : 'EQUIP THIS SKIN'; }
     else if (it.url) { use.hidden = false; use.disabled = false; use.textContent = it.owned ? 'VIEW ON-CHAIN ↗' : 'SEE THE PRIZE ↗'; }
     else if (!it.owned && it.kind === 'card') { use.hidden = false; use.disabled = false; use.textContent = 'HOW TO WIN IT'; }
     else use.hidden = true;
     const stage = this.$('sk-stage'); stage.classList.remove('nomodel'); stage.dataset.lock = '';
     stage.classList.toggle('lockedslab', !it.owned);
+    if (it.kind === 'gear') {
+      if (this.slab) { this.stand.remove(this.slab); if (!this.slab.userData.gear) this.slab.userData.dispose?.(); }
+      this.slab = null;
+      if (it.object) { const g = this.fitObject(it.object.clone(true), 1.55); g.userData.gear = true; this.slab = g; this.stand.add(g); this.pop = 0; }
+      else { stage.classList.add('nomodel'); stage.dataset.lock = 'COMING SOON'; }
+      return;
+    }
     loadImage(it.img).then((img) => {
       if (this.sel !== id || this.mode !== 'collection') return;
-      if (this.slab) { this.stand.remove(this.slab); this.slab.userData.dispose?.(); }
+      if (this.slab) { this.stand.remove(this.slab); if (!this.slab.userData.gear) this.slab.userData.dispose?.(); }
       this.slab = makeSlab(it, img); this.stand.add(this.slab); this.pop = 0;
     }).catch(() => {});
   }
@@ -671,7 +709,7 @@ export class SkinScreen {
     this.nameState();
     if (this.needName?.()) setTimeout(() => { if (this.isOpen && !matchMedia('(pointer: coarse)').matches) f.focus(); }, 300);   // phones: no keyboard pop-up until they tap
     this.setFilter(this.filter);
-    this.select(this.mode === 'collection' ? (this.items.find((x) => x.skin === this.getEquipped()) || this.items[0])?.id : this.getEquipped());
+    this.select(this.mode === 'collection' ? this.items[0]?.id : this.getEquipped());
     this.yaw = 0; this.yawV = 0; this.setZoom?.(1);
     if (document.pointerLockElement) document.exitPointerLock();
   }
@@ -696,8 +734,9 @@ export class SkinScreen {
     if (this.mode === 'collection' && this.slab) {
       this.pop = Math.min(1, this.pop + dt * 3.5);
       const k = 1 - Math.pow(1 - this.pop, 3);
-      this.slab.rotation.y = this.yaw + Math.sin(this.t * 0.7) * 0.18 * (this.dragging() ? 0 : 1);
-      this.slab.position.y = 1.2 + Math.sin(this.t * 1.3) * 0.035 + (1 - k) * 0.25;
+      const gear = this.slab.userData.gear;
+      this.slab.rotation.y = gear ? this.yaw + this.t * 0.35 * (this.dragging() ? 0 : 1) : this.yaw + Math.sin(this.t * 0.7) * 0.18 * (this.dragging() ? 0 : 1);
+      this.slab.position.y = gear ? (1 - k) * 0.2 : 1.2 + Math.sin(this.t * 1.3) * 0.035 + (1 - k) * 0.25;
       this.slab.scale.setScalar(0.85 + 0.15 * k);
     }
     if (c) {
@@ -723,7 +762,9 @@ export class SkinScreen {
     // closer default framing (full body, pedestal top) easing toward a chest-up portrait as you zoom in
     this.zoom += (this.zoomT - this.zoom) * (1 - Math.exp(-10 * dt));
     const zt = (this.zoom - 1) / 1.6, ez = zt * zt * (3 - 2 * zt);
-    if (this.mode === 'collection') { const h0 = this.touch ??= matchMedia('(pointer: coarse)').matches; this.frameCamera(this.cam, size.x, size.y, rect, 0.86, 1.14 + 0.08 * ez, (h0 ? 1.75 : 2.05) - 0.7 * ez); }
+    if (this.mode === 'collection') { const h0 = this.touch ??= matchMedia('(pointer: coarse)').matches, gear = this.slab?.userData.gear;
+      if (gear) this.frameCamera(this.cam, size.x, size.y, rect, 0.86, 0.75 + 0.1 * ez, (h0 ? 1.9 : 2.1) - 0.8 * ez);
+      else this.frameCamera(this.cam, size.x, size.y, rect, 0.86, 1.14 + 0.08 * ez, (h0 ? 1.75 : 2.05) - 0.7 * ez); }
     else this.frameCamera(this.cam, size.x, size.y, rect, 0.86, 0.98 + 0.5 * ez, 2.05 - 1.15 * ez);
     // pin the painted pedestal deck (image px 1288,1095; ~830 px across) under the feet: px-per-metre at the deck
     this.cam.updateMatrixWorld();

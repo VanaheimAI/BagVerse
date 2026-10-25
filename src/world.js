@@ -110,6 +110,17 @@ export class World {
     }
   }
 
+  /** a paid ad (api/ads live bookings): show the advertiser's image on screen `slot` instead of the house creatives */
+  setCreative(slot, url) {
+    const bb = this.billboards.find((b) => b.userData.slot === slot); if (!bb || !/^https:\/\//.test(url || '')) return;
+    if (bb.userData.creativeUrl === url) return;
+    new THREE.TextureLoader().setCrossOrigin('anonymous').load(url, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace; tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.anisotropy = 8;
+      bb.userData.house ||= bb.userData.texs; bb.userData.texs = [tex]; bb.userData.idx = 0; bb.material.map = tex; bb.material.needsUpdate = true;
+      bb.userData.creativeUrl = url; bb.userData.open = false;
+    });
+  }
+
   setupTickers() {
     for (const t of this.tickers) {
       const tex = tickerTexture(parseInt(t.name.split('_')[1], 10));

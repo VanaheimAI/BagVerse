@@ -55,19 +55,18 @@ create policy "wallets read" on public.wallets for select using (true);
 drop policy if exists "wallets delete own" on public.wallets;
 create policy "wallets delete own" on public.wallets for delete to authenticated using (user_id = auth.uid()::text);
 
--- ---------------------------------------------------------------- vault raffles (Oct 24)
--- Wano (graded One Piece) and Kanto (graded Pokémon) raffles. Free entry, one per player and per verified wallet,
--- written only by the server (api/raffle/enter). The draw (api/raffle/draw, Vercel cron Sundays 20:05 UTC) picks
--- the winner from the first Solana block at/after draws_at: sha256(blockhash + ':' + id) mod entries.
--- Add raffles in the Table Editor: id, vault ('wano' | 'kanto'), prize (json: name, set, grader, grade, cert, image,
--- url, mint), min_level, draws_at.
+-- ---------------------------------------------------------------- vault raffles + ad bookings (run this block once)
+-- Raffles: Wano (graded One Piece) / Kanto (graded Pokémon). Free entry, one per player and per verified wallet,
+-- written only by the server (api/raffle/enter). Draws: api/raffle/draw (Vercel cron + the game when due) picks the
+-- winner from the first Solana block at/after draws_at; the /admin dashboard can also draw now or pick a winner.
+-- Create and edit raffles in /admin (or the Table Editor).
 create table if not exists public.raffles (
   id              text primary key,
   vault           text not null check (vault in ('wano', 'kanto')),
-  prize           jsonb not null default '{}',
+  prize           jsonb not null default '{}',     -- name, set, grader, grade, variant, cert, mint, url, image
   min_level       integer not null default 0,
   draws_at        timestamptz not null,
-  status          text not null default 'open' check (status in ('open', 'drawn')),
+  status          text not null default 'open' check (status in ('open', 'drawn', 'cancelled')),
   entries         integer not null default 0,
   winner_user     text,
   winner_address  text,
@@ -84,18 +83,30 @@ create table if not exists public.raffle_entries (
   primary key (raffle_id, user_id),
   unique (raffle_id, address)
 );
+-- Billboard rentals paid with Solana Pay (USDC to the treasury wallet in src/treasury.js)
+create table if not exists public.ad_bookings (
+  id            text primary key,
+  slot          text not null,
+  tier          text,
+  days          integer not null default 7,
+  amount        numeric not null,
+  currency      text not null default 'USDC',
+  reference     text not null unique,              -- Solana Pay reference key (finds the payment on-chain)
+  status        text not null default 'pending' check (status in ('pending', 'paid', 'live', 'ended', 'cancelled')),
+  payer_user    text,
+  payer_name    text,
+  signature     text,
+  paid_amount   numeric,
+  creative_url  text,
+  starts_at     timestamptz,
+  ends_at       timestamptz,
+  created_at    timestamptz not null default now()
+);
 alter table public.raffles enable row level security;
 alter table public.raffle_entries enable row level security;
+alter table public.ad_bookings enable row level security;
 drop policy if exists "raffles read" on public.raffles;
 create policy "raffles read" on public.raffles for select using (true);
 drop policy if exists "raffle entries read" on public.raffle_entries;
 create policy "raffle entries read" on public.raffle_entries for select using (true);
--- no insert/update/delete policies: only the server writes
-
--- first two raffles, drawn this coming Sunday 20:00 UTC
-insert into public.raffles (id, vault, prize, min_level, draws_at) values
-  ('wano-1', 'wano', '{"name":"Monkey D. Luffy","set":"One Piece OP13 · Carrying on His Will #118","grader":"PSA","grade":"10","variant":"Alternate Art","cert":"146575703","mint":"inuRTqXX15NQAS48xZaHgFT4tCV4kdwrHisUhBkTZdD","url":"https://collectorcrypt.com/assets/solana/inuRTqXX15NQAS48xZaHgFT4tCV4kdwrHisUhBkTZdD"}', 25,
-    date_trunc('week', now()) + interval '6 days 20 hours' + case when now() > date_trunc('week', now()) + interval '6 days 20 hours' then interval '7 days' else interval '0' end),
-  ('kanto-1', 'kanto', '{"name":"Graded Pokémon card · TBA"}', 100,
-    date_trunc('week', now()) + interval '6 days 20 hours' + case when now() > date_trunc('week', now()) + interval '6 days 20 hours' then interval '7 days' else interval '0' end)
-on conflict (id) do nothing;
+-- ad bookings: no public policies (the game reads live ads through /api/ads); only the server writes anything
