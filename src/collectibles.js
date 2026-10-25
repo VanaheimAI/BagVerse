@@ -25,6 +25,8 @@ function openSpot(ph, cx, cz, r, rand, { tries = 60, clear = 1.2, maxY = 7 } = {
   return null;
 }
 
+// test play: the district kiosks are off for now (their prizes aren't real yet); the data stays for later
+export const KIOSKS_ON = false;
 export const KIOSKS = [
   { id: 'k_bull', zone: 'bull_run', name: "Chad's Bull Run Kiosk", tier: 1, prize: '1 g tokenized gold bar', event: 'Bull Run Sprint Cup', game: 'bagrun', gameName: 'Bag Run' },
   { id: 'k_doge', zone: 'doge_park', name: 'Doge Park Kiosk', tier: 1, prize: 'Graded trading card (PSA 9)', event: 'Doge Park Dash', game: 'tiledrop', gameName: 'Tile Drop' },
@@ -123,7 +125,7 @@ export class Collectibles {
     this.districtTotal = Object.fromEntries(DISTRICTS.map((d) => [d, this.bags.filter((b) => b.zone === d).length]));
     // ---- kiosks
     this.kiosks = [];
-    for (const k of KIOSKS) {
+    for (const k of KIOSKS_ON ? KIOSKS : []) {
       const z = zones[k.zone]; if (!z) continue;
       const pos = openSpot(ph, z.pos.x, z.pos.z, Math.min(16, z.radius * 0.5), rnd('kiosk:' + k.id), { tries: 120, clear: 2.2 })
         || openSpot(ph, z.pos.x, z.pos.z, z.radius, rnd('kiosk2:' + k.id), { tries: 160, clear: 1.6 });

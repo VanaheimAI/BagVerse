@@ -34,7 +34,7 @@ export const DAILY_POOL = [
   D('d_gm', 'Say GM in chat', 'gm', 1),
   D('d_chat', 'Send 3 chat messages', 'chat', 3),
   D('d_play', 'Play 15 active minutes', 'playMin', 15, { unit: 'min' }),
-  D('d_kiosk', 'Visit an RWA prize kiosk', 'rwa_view', 1),
+  D('d_kiosk', 'Check the raffles at the Kanto Vault', 'rwa_view', 1),   // (was: visit a district kiosk; kiosks are off for test play)
   D('d_jump', 'Jump 25 times', 'jump', 25),
   D('d_skin', 'Change your skin', 'skin', 1),
   D('d_bagrun', 'Play 2 Bag Runs', 'bagrun', 2, { gate: 'portals' }),
@@ -51,7 +51,7 @@ export const WEEKLY_POOL = [
   D('w_login', 'Play on 5 different days', 'login_day', 5),
   D('w_emote', 'Do 40 emotes', 'emote', 40),
   D('w_chat', 'Send 25 chat messages', 'chat', 25),
-  D('w_kiosk', 'Visit 4 different RWA kiosks', 'kiosk_new_week', 4),
+  D('w_kiosk', 'Check the Kanto Vault raffles 3 times', 'rwa_view', 3),   // (was: 4 different kiosks)
   D('w_walk', 'Walk 3 km', 'walk', 3000, { unit: 'm' }),
   D('w_bagrun', 'Play 10 Bag Runs', 'bagrun', 10, { gate: 'portals' }),
   D('w_bagrun600', 'Score 2,000+ in a Bag Run', 'bagrun_600', 1, { gate: 'portals' }),

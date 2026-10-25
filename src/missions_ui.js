@@ -2,7 +2,7 @@
 // welcome guide, the daily login calendar and the small XP feed.
 import { REWARDS, TIERS, tierOf, xpToNext, xpToReach, LEVEL_CAP } from './progression.js';
 import { TUTORIAL, ACHIEVEMENTS, DAILY_XP, DAILY_BONUS, WEEKLY_XP, WEEKLY_BONUS, WEEKLY_BONUS_AT } from './quests.js';
-import { KIOSKS, TIER_LEVEL } from './collectibles.js';
+import { KIOSKS, KIOSKS_ON, TIER_LEVEL } from './collectibles.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -63,8 +63,8 @@ export class MissionsUI {
         <li><b>Bags</b> 100 XP each, 1,000 XP per district cleared (20 per district, 220 total).</li>
         <li><b>Ads, flashmobs, GM</b> capped daily (250 / 200 / 25 XP). XP can't be bought; $VERSE holders get at most +15% on play XP.</li>
       </ul>
-      <h4>RWA prize kiosks</h4>
-      <ul class="mq-facts">${KIOSKS.map((k) => `<li><b>${esc(k.name)}</b> ${esc(k.event)}: ${esc(k.prize)}. Free entry, Lv ${TIER_LEVEL[k.tier]}+.</li>`).join('')}
+      <h4>Real-world prizes</h4>
+      <ul class="mq-facts">${(KIOSKS_ON ? KIOSKS : []).map((k) => `<li><b>${esc(k.name)}</b> ${esc(k.event)}: ${esc(k.prize)}. Free entry, Lv ${TIER_LEVEL[k.tier]}+.</li>`).join('')}
         <li><b>Kanto Vault</b> graded Pokémon raffles (Bull Run, south-east); <b>Wano Vault</b> One Piece raffles coming soon (east of the plaza).</li></ul>
       <h4>Controls</h4>
       <p class="mq-small">${this.touch ? 'Left stick move · drag right side to look · JUMP · E interact · 💃 emotes · 🛴 scooter · tap this tracker for missions' : 'WASD move · Shift walk · Space jump · E interact · 1 / 2 emotes · F flashmob · R scooter · J missions · K skins · M map · Enter chat'}</p>`;
@@ -129,7 +129,7 @@ export class MissionsUI {
         <ul class="mq-how">
           <li><span>⬆</span><div><b>Level up to 250</b><small>Every minute you play, every quest and every hidden Bag earns XP. New tiers: CHROME, HOLO, APEX, PRISM, ECLIPSE, GENESIS.</small></div></li>
           <li><span>📜</span><div><b>Missions</b><small>A quick guide first (about 10 minutes, gets you to Lv 10), then 3 dailies and 7 weeklies.</small></div></li>
-          <li><span>🏆</span><div><b>RWA prizes</b><small>Gold kiosks around the city enter you in free tournaments for vaulted real-world assets from Lv 25.</small></div></li>
+          <li><span>🏆</span><div><b>RWA prizes</b><small>Free raffles for real graded Pokémon cards at the Kanto Vault in Bull Run. Connect a Solana wallet to enter.</small></div></li>
           <li><span>🛴</span><div><b>Unlocks</b><small>Dance at Lv 2, your Punk Scooter at Lv 5, Thriller + flashmobs at Lv 10.</small></div></li>
         </ul>
       </section>
