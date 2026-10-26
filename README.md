@@ -728,3 +728,10 @@ Added next to the Solana setup without changing it (Solana sign-in, holder skins
 ## Map export to Blender (Oct 25)
 - `node tools/export_map.mjs` (with the fake build served on :4175) saves the map as the game builds it to `blender/out/bagverse_map.glb`: the city with the landmark cuts applied, vaults / GM arch / Doge statue / bull / Pepe bust, all city kit props, billboards and all 115 trees at full detail. Characters, traffic, collectibles, lights, effects and UI are left out. The export code (`src/mapexport.js`) only loads when `__bagverse.exportMap()` is called.
 - `python3 blender/export_map_blend.py blender/out/bagverse_map.glb blender/out/bagverse_map.blend` (needs `pip install bpy`) turns it into an organised .blend: collections Map / Landmarks / Props / Billboards / Trees, instanced props as linked duplicates, textures packed, metres, Z up. `blender/out/` is git-ignored (the .blend is ~110 MB).
+
+## Syncing the claude.ai artifact with Vercel (Oct 26)
+The artifact (BagVerse, claude.ai/artifact/QL41wWWbcE9zg8rXMFcfgf) runs the same build as Vercel, with two differences: the host can't serve `.glb`, so every model is published as a base64 copy `name.glb.txt`, and `index.html` sets `window.BAGVERSE_B64 = true` (right after `<title>`) so `loadModelRaw()` reads those. Multiplayer, chat and the leaderboard use the artifact's room / user / db capabilities automatically; raffles, wallet checks and ads need the Vercel API and show as offline there.
+1. `npx vite build --outDir <dir>`; drop `admin.html` and `assets/admin-*`, and models no longer used (retired Maria / Solana Queen, hidden Kaizoku).
+2. Base64 each `.glb` to `.glb.txt`, inject the flag into `index.html`.
+3. Publish to the same URL, sending only new or changed files (the published file list shows sizes) and `null` for files the new build no longer has.
+All runtime model loads go through `loadModelRaw()` (bundled files) or straight to the network (https uploads), so new models work in both places.

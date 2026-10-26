@@ -960,7 +960,7 @@ raffles.start();
 const PACKS = ['destined_rivals', 'journey_together', 'mega_evolution'].map((n) => `assets/packs/${n}.glb`);
 const showcaseKey = [], showcaseRaffle = { apex_arena: [] }, glbCache = new Map();
 const glbReady = new Map(), glbBad = new Set(), glbWait = new Set();   // url -> loaded scene (for the Collection cards); urls that failed to load
-const loadGlb = (url) => { if (!glbCache.has(url)) glbCache.set(url, lazyLoader.loadAsync(url).then((g) => { glbReady.set(url, g.scene); return g; }).catch((e) => { glbCache.delete(url); throw e; })); return glbCache.get(url); };
+const loadGlb = (url) => { if (!glbCache.has(url)) glbCache.set(url, (/^https?:/.test(url) ? lazyLoader.loadAsync(url) : loadModelRaw(url, null, lazyLoader)).then((g) => { glbReady.set(url, g.scene); return g; }).catch((e) => { glbCache.delete(url); throw e; })); return glbCache.get(url); };
 /** the 3D model shown for a raffle: its uploaded GLB, else (Kanto) the placeholder pack in its showcase spot */
 function raffleModelUrl(r) {
   if (/^https:\/\//.test(r?.prize?.model || '') && !glbBad.has(r.prize.model)) return r.prize.model;
