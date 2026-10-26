@@ -735,3 +735,7 @@ The artifact (BagVerse, claude.ai/artifact/QL41wWWbcE9zg8rXMFcfgf) runs the same
 2. Base64 each `.glb` to `.glb.txt`, inject the flag into `index.html`.
 3. Publish to the same URL, sending only new or changed files (the published file list shows sizes) and `null` for files the new build no longer has.
 All runtime model loads go through `loadModelRaw()` (bundled files) or straight to the network (https uploads), so new models work in both places.
+
+## Scooter goes back to the garage (Oct 26)
+- Getting off the scooter (E / R / 🛴) puts it back in the garage: it vanishes with the poof instead of staying parked. R / 🛴 summons it again under you.
+- Any teleport (fast travel, mini-game start / finish, go-to-teammate, go-to-vault) gets you off first (`player.teleport` wrapper). Before, fast travel while riding left you "on" the far-away scooter: the game glued your position, and so your map marker and multiplayer position, back to it. Test: `tools/scooter_garage_test.mjs`.

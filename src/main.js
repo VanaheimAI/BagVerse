@@ -285,7 +285,9 @@ Progress.unlockAll = params.has('unlockall');   // testing: every level gate ope
 const progress = new Progress();
 const profile = () => ({ tag: progress.tier[1], name: progress.s.name, level: progress.s.level });
 const player = new Player(CHARS[charId], world.physics, world.spawn, profile());
-{ const tp = player.teleport.bind(player); player.teleport = (p) => { if (started && player.body.pos.distanceTo(p) > 25) fx.cut(); tp(p); }; }   // long jumps (fast travel, go-to, game exits) fade in
+{ const tp = player.teleport.bind(player); player.teleport = (p) => {
+  try { if (veh) dismount(); } catch (_) {}   // any teleport (fast travel, mini-games, go-to) gets you off first; riding keeps you glued to the vehicle
+  if (started && player.body.pos.distanceTo(p) > 25) fx.cut(); tp(p); }; }   // long jumps (fast travel, go-to, game exits) fade in
 scene.add(player.root);
 const cam = new FollowCamera(camera, world.physics);
 cam.yaw = 0;
@@ -677,6 +679,7 @@ function dismount() {
   player.c.play('Idle', 0.25);
   cam.dist = Math.min(cam.dist, 6.5);
   $('hud').classList.remove('driving'); $('jumpbtn').textContent = 'JUMP';
+  if (v === scooter) { scooter.root.visible = false; scooter.summoned = false; scooter.v = 0; }   // back into the garage (R / 🛴 summons it again); never left lying around
 }
 const enterCar = () => car && mount(car);
 /** R / 🛴: summon your scooter under you and hop on (again: get off) */
