@@ -32,7 +32,8 @@ export const VAULTS = {
     holos: { dist: 6.6, spread: 5.5, y: 0.7 },                       // metres in front of the door: forecourt on the plinth
     comingSoon: true,                                                // test play: no raffles yet; the One Piece slab floats under a COMING SOON sign
     soonText: ['RAFFLE OPENS AFTER $VERSE TOKEN', 'TRADES $250K VOLUME'],   // the sign's details (two lines)
-    soonModel: 'assets/wano_slab.glb',                               // the featured slab (main.js loads it into showcase 0)
+    soonModel: 'assets/wano_slab.glb',
+    clearKit: [[40.6, -21.0]],                                       // street lamp right in front of the slab (three.js x, z)                               // the featured slab (main.js loads it into showcase 0)
   },
   apex_arena: {
     id: 'kanto', label: 'KANTO VAULT', theme: 'pokemon', color: '#ff3b3b',
@@ -207,7 +208,8 @@ export function placeVaults(scene, world, models, { shadows = true } = {}) {
   const covered = (x, z) => active.some(([, V]) => { const { n, t } = frame(V), dx = x - V.centre[0], dz = z - V.centre[1];
     return Math.abs(dx * n.x + dz * n.z) <= V.slab * V.k + 1 && Math.abs(dx * t.x + dz * t.z) <= V.k * 0.5 + 1; });
   const k0 = world.kitSpots.length, t0 = world.treeSpots.length;
-  world.kitSpots = world.kitSpots.filter((s) => !covered(s.pos.x, s.pos.z));
+  const cleared = (x, z) => active.some(([, V]) => (V.clearKit || []).some(([cx, cz]) => Math.hypot(x - cx, z - cz) < 1.5));   // props a vault asks to remove
+  world.kitSpots = world.kitSpots.filter((s) => !covered(s.pos.x, s.pos.z) && !cleared(s.pos.x, s.pos.z));
   world.treeSpots = world.treeSpots.filter((s) => !covered(s.pos.x, s.pos.z));
   if (k0 - world.kitSpots.length || t0 - world.treeSpots.length) console.log('vaults: cleared', k0 - world.kitSpots.length, 'kit props,', t0 - world.treeSpots.length, 'trees');
   const pedMat = new THREE.MeshStandardMaterial({ color: '#efe9e0', roughness: 0.35, metalness: 0.1 });

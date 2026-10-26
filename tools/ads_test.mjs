@@ -7,7 +7,7 @@ const p = await (await b.newContext({ viewport: { width: 1000, height: 600 } }))
 p.on('pageerror', (e) => console.log('[pageerror]', e.message));
 await fetch(BASE + '/__fake/t/ad_bookings', { method: 'POST', body: '[]' });
 await p.goto(BASE + '/?autostart&fixeddt=0.1&q=low', { timeout: 900000, waitUntil: 'commit' }); await p.waitForFunction('window.__ready && window.__frames > 3', null, { timeout: 900000 });
-const open = () => p.evaluate(async () => { const B = window.__bagverse, bb = B.world.billboards.find((x) => x.userData.tier === 'totem'); await B.openAdSlot(bb, 120, B.liveAds.get(bb.userData.slot)); return bb.name; });
+const open = () => p.evaluate(async () => { const B = window.__bagverse, bb = B.world.billboards.find((x) => x.userData.tier === 'totem'); await B.openAdSlot(bb, B.adPrice ? B.adPrice('totem') : 60, B.liveAds.get(bb.userData.slot)); return bb.name; });
 const slot = await open(); await p.waitForTimeout(300);
 console.log('screen', slot, '|', await p.evaluate(() => [...document.querySelectorAll('#mbody .row')].map((e) => e.textContent.replace(/\s+/g, ' ').trim()).join(' | ')));
 await p.click('#adbook'); await p.waitForSelector('.adqr img'); await p.waitForTimeout(200);
@@ -16,7 +16,7 @@ console.log('booked:', bk.id, '| pay link:', bk.url.slice(0, 64) + '…', '| key
 await p.screenshot({ path: '/tmp/claude-0/ads_qr.png', timeout: 600000 });
 await p.click('#adcheck'); await p.waitForTimeout(600); console.log('check before paying:', await p.textContent('#aderr'));
 const ref = new URL(bk.url.replace('solana:', 'http://x/')).searchParams.get('reference');
-await fetch(BASE + '/__fake/pay', { method: 'POST', body: JSON.stringify({ reference: ref, amount: 120, payer: 'Payer1111111111111111111111111111111111111' }) });
+await fetch(BASE + '/__fake/pay', { method: 'POST', body: JSON.stringify({ reference: ref, amount: 60, payer: 'Payer1111111111111111111111111111111111111' }) });
 await p.click('#adcheck'); await p.waitForSelector('#adfile', { state: 'attached', timeout: 30000 });
 console.log('after paying:', await p.evaluate(() => document.getElementById('adpay').textContent.replace(/\s+/g, ' ').trim().slice(0, 120)));
 // a 16:9 test image

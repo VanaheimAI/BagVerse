@@ -36,7 +36,7 @@ function rocket(g, x, y, s, rot = -0.6) {
 const LIB = [
   (w, h, v) => { const c = canvas(w, h), g = c.getContext('2d'); bgGrad(g, w, h, '#14072b', '#000'); g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(20, 20, w - 40, h - 40);
     glowText(g, 'AD SPACE', w / 2, h * 0.38, v ? 110 : 130, '#ffffff', 'Rajdhani', 700, 10);
-    glowText(g, '$250 / 7 DAYS (USDC)', w / 2, h * 0.58, v ? 52 : 64, C.lime, 'Rajdhani', 700, 14);
+    glowText(g, 'FROM $60 / 7 DAYS (USDC)', w / 2, h * 0.58, v ? 52 : 64, C.lime, 'Rajdhani', 700, 14);
     glowText(g, 'WALK UP + PRESS E TO RENT', w / 2, h * 0.76, v ? 32 : 36, C.cyan, 'Rajdhani', 600, 8); return c; },
   (w, h, v) => { const c = canvas(w, h), g = c.getContext('2d'); bgGrad(g, w, h, '#1d0a4a', '#05020f');
     for (let i = 0; i < 90; i++) { g.fillStyle = `rgba(255,255,255,${Math.random()})`; g.fillRect(Math.random() * w, Math.random() * h, 3, 3); }
