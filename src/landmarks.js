@@ -30,7 +30,9 @@ export const VAULTS = {
     centre: [53.6, -22], ground: 1.2, front: [-1, 0],                // on the old plinth (top 1.2 m), door faces west
     cuts: [{ type: 'box', c: [50.25, -22], n: [-1, 0], halfW: 11.2, halfD: 11.6, y1: 34, floorY: 1.3 }],
     holos: { dist: 6.6, spread: 5.5, y: 0.7 },                       // metres in front of the door: forecourt on the plinth
-    comingSoon: true,                                                // test play: no raffles yet; a floating COMING SOON sign instead of the showcases
+    comingSoon: true,                                                // test play: no raffles yet; the One Piece slab floats under a COMING SOON sign
+    soonText: ['RAFFLE OPENS AFTER $VERSE TOKEN', 'TRADES $250K VOLUME'],   // the sign's details (two lines)
+    soonModel: 'assets/wano_slab.glb',                               // the featured slab (main.js loads it into showcase 0)
   },
   apex_arena: {
     id: 'kanto', label: 'KANTO VAULT', theme: 'pokemon', color: '#ff3b3b',
@@ -126,7 +128,12 @@ export function prepareVaults(world, models) {
   // holograms: Wano = the real Luffy slab between two mystery One Piece slabs; Kanto = three mystery Pokemon slabs
   world.holoSpecs = [];
   for (const [zid, V] of active) {
-    if (!V.holos || V.comingSoon) continue;
+    if (!V.holos) continue;
+    if (V.comingSoon) {   // one floating showcase in the middle of the forecourt (no label: the sign above says it all)
+      const { n } = frame(V), p = holoSpots(V)[1];
+      world.holoSpecs.push({ pos: p.clone().setY(V.ground + 2.45), facing: Math.atan2(n.x, n.z), kind: 'pack', slot: 0, theme: V.theme, label: [V.label, ''], zone: zid, noLabel: true, color: V.color });
+      continue;
+    }
     const spots = holoSpots(V), { n } = frame(V);
     spots.forEach((p, i) => {
       if (V.packs) { world.holoSpecs.push({ pos: p.clone().setY(V.ground + 2.45), facing: Math.atan2(n.x, n.z), kind: 'pack', slot: i, theme: V.theme, label: ['POKÉMON RAFFLE', 'GRADED CARD · TBA'], zone: zid }); return; }
@@ -164,16 +171,18 @@ export function prepareVaults(world, models) {
 
 /** a vault that isn't open yet: a big COMING SOON sign floating over its forecourt, always facing the player */
 function comingSoonSign(scene, world, V) {
-  const c = document.createElement('canvas'); c.width = 1024; c.height = 384; const g = c.getContext('2d');
-  g.fillStyle = 'rgba(12,8,14,.88)'; g.beginPath(); g.roundRect(14, 14, 996, 356, 36); g.fill();
-  g.shadowColor = V.color; g.shadowBlur = 28; g.strokeStyle = V.color; g.lineWidth = 10; g.beginPath(); g.roundRect(14, 14, 996, 356, 36); g.stroke();
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 448; const g = c.getContext('2d');
+  g.fillStyle = 'rgba(12,8,14,.88)'; g.beginPath(); g.roundRect(14, 14, 996, 420, 36); g.fill();
+  g.shadowColor = V.color; g.shadowBlur = 28; g.strokeStyle = V.color; g.lineWidth = 10; g.beginPath(); g.roundRect(14, 14, 996, 420, 36); g.stroke();
   g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.shadowColor = '#ffffff'; g.shadowBlur = 18; g.fillStyle = '#ffffff'; g.font = '800 150px Rajdhani, "Arial Black", sans-serif'; g.fillText('COMING SOON', 512, 168);
-  g.shadowColor = V.color; g.shadowBlur = 12; g.fillStyle = V.color; g.font = '700 50px Rajdhani, sans-serif'; g.fillText(`${V.label} · ONE PIECE RAFFLES`, 512, 290);
+  g.shadowColor = '#ffffff'; g.shadowBlur = 18; g.fillStyle = '#ffffff'; g.font = '800 140px Rajdhani, "Arial Black", sans-serif'; g.fillText('COMING SOON', 512, 138);
+  const lines = V.soonText || [`${V.label} · ONE PIECE RAFFLES`];
+  g.shadowColor = V.color; g.shadowBlur = 12; g.fillStyle = '#ffc83d';
+  lines.forEach((t, i) => { let s = 58; do { g.font = `700 ${s}px Rajdhani, sans-serif`; s -= 2; } while (g.measureText(t).width > 920 && s > 24); g.fillText(t, 512, 268 + i * 76); });
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, toneMapped: false, depthWrite: false }));
-  const { n, door } = frame(V), base = door.clone().addScaledVector(n, V.holos.dist).setY(V.ground + 3.5);
-  sign.scale.set(7.2, 2.7, 1); sign.position.copy(base); scene.add(sign);
+  const { n, door } = frame(V), base = door.clone().addScaledVector(n, V.holos.dist).setY(V.ground + 5.9);   // above the floating slab
+  sign.scale.set(7.2, 3.15, 1); sign.position.copy(base); scene.add(sign);
   world.anim?.push((t) => { sign.position.y = base.y + Math.sin(t * 1.1) * 0.18; });
   const L = new THREE.PointLight(V.color, 14, 16, 2); L.position.copy(door).addScaledVector(n, 2).setY(V.ground + 4); scene.add(L);
 }

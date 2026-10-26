@@ -222,12 +222,15 @@ export class World {
     specs.forEach((sp, i) => {
       if (sp.kind === 'pack') {   // a floating, turning model (booster pack placeholder or the raffle's own GLB); no beam
         const holder = new THREE.Group(), pos = sp.pos.clone(); holder.position.copy(pos); this.scene.add(holder);
-        const ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.05, 40), new THREE.MeshBasicMaterial({ color: 0xff3b3b, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.05, 40), new THREE.MeshBasicMaterial({ color: sp.color || 0xff3b3b, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
         ring.rotation.x = -Math.PI / 2; ring.position.set(pos.x, pos.y - 2.3, pos.z); this.scene.add(ring);
-        const cv = labelTexture(sp.label), tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-        const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, toneMapped: false, depthWrite: false })); spr.scale.set(2.6, 0.8, 1); spr.position.set(pos.x, pos.y + 1.85, pos.z); this.scene.add(spr);
-        const L = { cv, tex, name: sp.label[0], raffle: true };
-        (this.holoLabels ||= []).push(L);
+        let L = { name: sp.label[0] };   // noLabel: a plain record (setShowcase still writes to it), nothing drawn
+        if (!sp.noLabel) {
+          const cv = labelTexture(sp.label), tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+          const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, toneMapped: false, depthWrite: false })); spr.scale.set(2.6, 0.8, 1); spr.position.set(pos.x, pos.y + 1.85, pos.z); this.scene.add(spr);
+          L = { cv, tex, name: sp.label[0], raffle: true };
+          (this.holoLabels ||= []).push(L);
+        }
         const sc = { holder, pos, label: L, zone: sp.zone, slot: sp.slot, ring, glowMats: [] };
         (this.showcases[sp.zone] ||= [])[sp.slot] = sc;
         this.anim.push((t) => {

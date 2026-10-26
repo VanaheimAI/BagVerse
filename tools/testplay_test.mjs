@@ -13,6 +13,7 @@ console.log('tutorial step:', await p.evaluate(() => window.__bagverse.quests.cu
 await p.evaluate(() => { document.getElementById('hud').hidden = false; const B = window.__bagverse; const f = B.vaultFront('rwa_vault'), V = B.player.root.position.constructor;
   const s = new V(f.x - 14, 0, f.z); s.y = B.world.physics.groundAt(s.x, s.z, 8) + 0.1; B.player.teleport(s);
   const face = Math.atan2(1, 0); B.player.facing = face; B.player.root.rotation.y = face; B.cam.yaw = face + Math.PI; B.cam.pitch = 0.12; B.cam.dist = 7; });
+await p.waitForFunction(() => window.__bagverse.world.showcases.rwa_vault?.[0]?.holder.children.length, null, { timeout: 60000, polling: 500 }).catch(() => console.log('slab not loaded')); console.log('wano slab:', await p.evaluate(() => window.__bagverse.world.showcases.rwa_vault?.[0]?.holder.children.length ? 'loaded' : 'missing'));
 await frames(6); await p.screenshot({ path: '/tmp/claude-0/wano_soon.png', timeout: 600000 });
 await p.evaluate(() => { const B = window.__bagverse; const f = B.vaultFront('rwa_vault'), V = B.player.root.position.constructor; const s = new V(f.x - 1, 0, f.z); s.y = B.world.physics.groundAt(s.x, s.z, 8) + 0.1; B.player.teleport(s); });
 await frames(4); console.log('wano prompt:', await p.textContent('#prompt'));

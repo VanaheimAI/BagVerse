@@ -985,6 +985,8 @@ function syncShowcases() {
   });
 }
 raffles.onChange(syncShowcases); syncShowcases();
+// Wano Vault (coming soon): the featured One Piece slab floats in the forecourt
+if (VAULTS.rwa_vault.comingSoon && VAULTS.rwa_vault.soonModel && world.showcases?.rwa_vault) loadGlb(VAULTS.rwa_vault.soonModel).then((g) => world.setShowcase('rwa_vault', 0, g.scene.clone(true))).catch((e) => console.warn('wano slab', e));
 function openVault(zid, label, raffleId = null) {
   const L = progress.s.level, onepiece = zid === 'rwa_vault', vault = onepiece ? 'wano' : 'kanto';
   const list = raffles.openFor(vault), r = list.find((x) => x.id === raffleId) || list[0] || null, last = raffles.last(vault);
@@ -1129,7 +1131,7 @@ function interactions(dt) {
     const vz = world.zones.find((z) => z.id === zid); if (!vz) continue;
     const f = vaultFront(zid) || vz.pos;
     if (Math.hypot(p.x - f.x, p.z - f.z) > 7 || Math.abs(p.y - f.y) > 4) continue;
-    if (VAULTS[zid].comingSoon) { promptHtml = `<kbd>E</kbd> ${vz.label} · COMING SOON`; action = () => { quests.emit('rwa_view', 1, { id: 'vault' }); sfx.play('scandeny'); hud.toast(`${vz.label} OPENS SOON · POKÉMON RAFFLES ARE LIVE AT THE KANTO VAULT (BULL RUN)`); }; continue; }
+    if (VAULTS[zid].comingSoon) { promptHtml = `<kbd>E</kbd> ${vz.label} · COMING SOON`; action = () => { quests.emit('rwa_view', 1, { id: 'vault' }); sfx.play('scandeny'); hud.toast(`${vz.label} · ${(VAULTS[zid].soonText || ['OPENS SOON']).join(' ')} · POKÉMON RAFFLES ARE LIVE AT THE KANTO VAULT`); }; continue; }
     const nOpen = raffles.openFor(zid === 'rwa_vault' ? 'wano' : 'kanto').length;
     promptHtml = `<kbd>E</kbd> ${vz.label} · ${nOpen > 1 ? `${nOpen} RAFFLES` : "THIS WEEK'S RAFFLE"}`;
     action = () => { quests.emit('rwa_view', 1, { id: zid === 'rwa_vault' ? 'vault' : 'kanto' }); openVault(zid, vz.label); };
