@@ -6,8 +6,7 @@ import '@fontsource/rajdhani/latin-700.css';
 import '@fontsource/permanent-marker/latin-400.css';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { EffectComposer } from 'postprocessing';
-import { Look, PRESETS, ORDER } from './look.js';
+import { createGfx, PRESETS, ORDER, BACKEND } from './gfx.js';   // WebGL (gfx.js) or WebGPU (gfx.webgpu.js, the /webgpu build)
 import { Grass } from './grass.js';
 import { Trees } from './trees.js';
 import { Kit } from './kit.js';
@@ -62,7 +61,23 @@ const store = {
 const MOBILE = /Android|iPhone|iPad/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);   // iPadOS reports as a Mac
 // one-time reset (v2 render pipeline): tiers that were lowered automatically by older crash heuristics go back to default
 if (store.get('bagverse.pipeline') !== '3') { store.set('bagverse.q', null); store.set('bagverse.boot', null); store.set('bagverse.pipeline', '3'); }   // v3: everyone back to the LOW default once
-let quality = params.get('q') || (params.has('low') ? 'low' : null) || store.get('bagverse.q') || 'low';   // LOW by default on every device; GFX button raises it
+// first visit (no tier chosen or remembered): pick from the device. Phones / tablets stay LOW (their memory limits
+// were behind the old crashes); desktops get HIGH on a dedicated / Apple-silicon GPU, MEDIUM on integrated ones,
+// LOW on software renderers. The slow-frame guard below still steps down live if a pick turns out too heavy.
+function autoQuality() {
+  if (MOBILE) return 'low';
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) return 'low';
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const gpu = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) || '');
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    if (/swiftshader|llvmpipe|software|basic render|mesa offscreen/i.test(gpu)) return 'low';
+    if (/nvidia|geforce|rtx|gtx|quadro|radeon(?! graphics)|\bamd\b.*(rx|pro)|apple m\d|apple gpu/i.test(gpu)) return 'high';
+    return 'medium';   // Intel UHD / Iris, AMD Radeon Graphics (APU), unknown
+  } catch (_) { return 'low'; }
+}
+let quality = params.get('q') || (params.has('low') ? 'low' : null) || store.get('bagverse.q') || autoQuality();   // the GFX button picks by hand (remembered)
 if (!QUALITIES.includes(quality)) quality = 'low';
 let crashNote = null;
 if (store.get('bagverse.boot') && !params.has('q') && !FIXED_DT) {
@@ -93,15 +108,11 @@ const A = (name) => `assets/${name}${LOW ? '.m' : ''}.glb`;
 
 // ---------------------------------------------------------------- renderer
 const canvas = $('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q.aa, powerPreference: 'high-performance' });
 // cap the internal resolution by total pixels: the post stack (AO, bloom mips, composer targets) scales with it,
 // and a 4K / high-DPI screen at 1.5x would otherwise allocate hundreds of MB of GPU memory
 const MAX_PX = SAFE ? 0.7e6 : { high: 2.6e6, medium: 2.0e6, low: 1.2e6 }[quality];
 const pixelRatio = () => Math.max(0.5, Math.min(devicePixelRatio, Q.dpr, Math.sqrt(MAX_PX / (innerWidth * innerHeight))));
-renderer.setPixelRatio(pixelRatio());
-renderer.setSize(innerWidth, innerHeight);
-canvas.addEventListener('webglcontextlost', (e) => {
-  e.preventDefault();
+const onGfxLost = () => {   // lost WebGL context / WebGPU device: restart one tier lower
   const lower = QUALITIES[Math.max(0, QUALITIES.indexOf(quality) - 1)];
   store.set('bagverse.q', lower); clearBoot();
   if (quality === 'low') store.set('bagverse.safe', '1');   // already at the bottom: next run in SAFE mode
@@ -109,16 +120,14 @@ canvas.addEventListener('webglcontextlost', (e) => {
   o.innerHTML = `<b>GRAPHICS RESET</b><span>Your GPU dropped the game. Restarting at ${lower.toUpperCase()} quality…</span>`;
   document.body.appendChild(o);
   setTimeout(() => location.reload(), 1800);
-});
+};
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 1200);
-const look = new Look(renderer, scene, camera, { smaa: LOW || !renderer.capabilities.isWebGL2, low: LOW, ao: Q.ao && !params.has('noao'), csm: Q.csm && !params.has('nocsm'), gi: Q.gi && !params.has('nogi') });
+const { renderer, look, composer, backend: GFX } = await createGfx(scene, camera, {
+  canvas, quality, LOW, aa: Q.aa, pixelRatio, onLost: onGfxLost, params,
+  look: { low: LOW, ao: Q.ao && !params.has('noao'), csm: Q.csm && !params.has('nocsm'), gi: Q.gi && !params.has('nogi') },
+});
 if (SAFE) { renderer.shadowMap.enabled = false; look.sun.castShadow = false; }
-// HIGH / MEDIUM: render the post stack into a 4x MSAA half-float target (clean edges; post-processing otherwise
-// disables the canvas' own antialiasing). LOW / WebGL1: SMAA pass at the end instead.
-const MSAA = !LOW && renderer.capabilities.isWebGL2;
-const composer = new EffectComposer(renderer, { frameBufferType: THREE.HalfFloatType, multisampling: MSAA ? 4 : 0 });
-look.buildComposer(composer, { high: quality === 'high' });
 let lookName = params.get('look') || store.get('bagverse.look') || 'day';
 if (!PRESETS[lookName]) lookName = 'day';
 
@@ -521,7 +530,9 @@ look.apply(lookName);
 // (KHR_parallel_shader_compile). ~100 programs compiled synchronously on frame one can freeze the tab
 // for seconds on some Windows/ANGLE drivers, and the browser may then kill the GPU process.
 $('loadtxt').textContent = 'PREPARING GRAPHICS…';
-try { await renderer.compileAsync(scene, camera); } catch (e) { console.warn('shader precompile failed', e); }
+// precompile every material up front (WebGL). On WebGPU r170 a throw inside compileAsync leaves the renderer mid-pass
+// and nothing reaches the canvas afterwards, so that build compiles lazily on first draw.
+if (GFX === 'webgl') { try { await renderer.compileAsync(scene, camera); } catch (e) { console.warn('shader precompile failed', e); } }
 setLook(lookName);
 
 const gfxBtn = $('gfxbtn');
@@ -1285,7 +1296,7 @@ const syncHolder = () => {
 wallet.onChange(syncHolder); syncHolder();
 const openSkins = () => { if (skins.isOpen) return; sfx.play('whoosh'); fx.through(() => { $('loader').hidden = true; $('hud').hidden = true; $('emotewheel').hidden = true; hud.closeModal(); skins.openNow('skins'); }, 220, 450); };
 if (params.has('autostart')) start(); else openSkins();
-window.__bagverse = { exportMap: () => import('./mapexport.js').then((m) => m.exportMap({ scene, trees })), openAdSlot, liveAds, fx, openCollection, raffles, openVault, tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
+window.__bagverse = { GFX, exportMap: () => import('./mapexport.js').then((m) => m.exportMap({ scene, trees })), openAdSlot, liveAds, fx, openCollection, raffles, openVault, tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
 
 // slow-frame guard: after a short warm-up, a few seconds under ~22 fps sheds the heaviest effects live
 // and remembers the lower tier for next time

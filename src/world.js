@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { billboardCreatives, tickerTexture, cardTexture, labelTexture, isOpenSlot } from './creatives.js';
 import { Physics, toWorldFloat } from './physics.js';
 import { RWA_ASSETS, rwaSlabTexture } from './rwa.js';
+import { portalMaterial, createSmoke } from './fxmats.js';
 
 function bakeToWorld(o) {
   const g = toWorldFloat(o);
@@ -144,25 +145,9 @@ export class World {
       const normal = new THREE.Vector3().fromBufferAttribute(g.attributes.normal, 0).normalize();
       const u = new THREE.Vector3(0, 1, 0).cross(normal).normalize();
       const color = new THREE.Color(p.userData.color || '#7cff3d');
-      p.material = new THREE.ShaderMaterial({
-        transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
-        uniforms: { uTime: { value: 0 }, uColor: { value: color }, uCenter: { value: center }, uU: { value: u }, uR: { value: 3.05 } },
-        vertexShader: `varying vec3 vP; varying float vD; void main(){ vP = position; vec4 mv = modelViewMatrix * vec4(position,1.0); vD = -mv.z; gl_Position = projectionMatrix * mv; }`,
-        fragmentShader: `uniform float uTime; uniform vec3 uColor; uniform vec3 uCenter; uniform vec3 uU; uniform float uR; varying vec3 vP; varying float vD;
-          void main(){
-            vec3 d = vP - uCenter; vec2 q = vec2(dot(d, uU), d.y) / uR;
-            float r = length(q); float a = atan(q.y, q.x);
-            float swirl = sin(a * 5.0 + r * 14.0 - uTime * 4.0) * 0.5 + 0.5;
-            float core = smoothstep(0.9, 0.0, r);
-            float rim = smoothstep(0.75, 1.0, r);
-            vec3 col = mix(uColor * 0.35, vec3(1.0), core * 0.35) + uColor * swirl * 0.9 * (1.0 - r);
-            col += uColor * rim * 1.5;
-            float near = smoothstep(2.0, 9.0, vD);   // fade when the camera gets close so it doesn't blow out the bloom
-            gl_FragColor = vec4(col * (0.5 + 0.6 * near), (0.3 + 0.5 * swirl) * near * smoothstep(1.02, 0.96, r));
-          }`,
-      });
+      const pm = portalMaterial({ color, center, u, r: 3.05 }); p.material = pm.material;
       Object.assign(p.userData, { center, normal });
-      this.anim.push((t) => { p.material.uniforms.uTime.value = t; });
+      this.anim.push((t) => { pm.time.value = t; });
     }
   }
 
@@ -306,20 +291,9 @@ export class World {
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setAttribute('life', new THREE.BufferAttribute(life, 1));
-    const mat = new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false,
-      uniforms: { uScale: { value: 600 } },
-      vertexShader: `attribute float life; attribute vec3 color; varying float vL; varying vec3 vC;
-        void main(){ vL = life; vC = color; vec4 mv = modelViewMatrix * vec4(position,1.0);
-          gl_PointSize = (2.0 + life * 7.0) * 600.0 / -mv.z; gl_Position = projectionMatrix * mv; }`,
-      fragmentShader: `varying float vL; varying vec3 vC;
-        void main(){ float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard;
-          float a = smoothstep(0.5, 0.0, d) * (1.0 - vL) * smoothstep(0.0, 0.15, vL) * 0.45;
-          gl_FragColor = vec4(vC * 0.9, a); }`,
-    });
-    const pts = new THREE.Points(geo, mat); pts.frustumCulled = false;
-    this.scene.add(pts);
-    this.smoke = { anchors, PER, geo, pos, life, seed };
+    const sm = createSmoke(geo);
+    this.scene.add(sm.object);
+    this.smoke = { anchors, PER, geo, pos, life, seed, flush: sm.flush };
   }
 
   update(t, dt) {
@@ -346,7 +320,7 @@ export class World {
           s.pos[j * 3 + 2] = a.pos.z + Math.sin(sd) * spread * l;
         }
       });
-      s.geo.attributes.position.needsUpdate = true; s.geo.attributes.life.needsUpdate = true;
+      s.flush();
     }
     // hologram countdown labels, once per second
     this.nextLabel -= dt;

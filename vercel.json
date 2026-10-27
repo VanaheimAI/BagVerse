@@ -42,6 +42,10 @@
     {
       "source": "/admin",
       "destination": "/admin.html"
+    },
+    {
+      "source": "/webgpu",
+      "destination": "/webgpu.html"
     }
   ]
 }

@@ -6,3 +6,4 @@ dist
 blender/king_fixed.glb
 *.log
 blender/out/
+webgpu.html

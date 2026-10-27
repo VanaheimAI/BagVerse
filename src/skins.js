@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { makeCharacter } from './player.js';
 import { charUniforms } from './surface.js';
+import { backdropMaterial } from './fxmats.js';
 import THUMBS from './assets/skin_thumbs.js';   // pre-rendered card portraits (tools/dump_thumbs.mjs)
 import ART from './assets/skin_art/index.js';
 import BG_URL from './assets/skin_bg/vault_room.webp';
@@ -150,21 +151,8 @@ export class SkinScreen {
     // painted pedestal's deck sits exactly under the character's feet (and follows zoom / window size)
     const bgTex = new THREE.TextureLoader().load(matchMedia('(pointer: coarse)').matches ? BG_URL_M : BG_URL);
     bgTex.colorSpace = THREE.SRGBColorSpace; bgTex.generateMipmaps = true; bgTex.minFilter = THREE.LinearMipmapLinearFilter;
-    this.bg = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
-      depthTest: false, depthWrite: false,
-      uniforms: { uTex: { value: bgTex }, uScreen: { value: new THREE.Vector2(1, 1) }, uAnchor: { value: new THREE.Vector2() },
-        uScale: { value: 1 }, uImg: { value: new THREE.Vector2(2576, 1438) }, uDeck: { value: new THREE.Vector2(1288, 1095) } },
-      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 1.0, 1.0); }',
-      fragmentShader: `uniform sampler2D uTex; uniform vec2 uScreen, uAnchor, uImg, uDeck; uniform float uScale; varying vec2 vUv;
-        void main(){
-          vec2 px = vec2(vUv.x, 1.0 - vUv.y) * uScreen;                 // screen px, y down
-          vec2 ip = (px - uAnchor) / uScale + uDeck;                     // image px
-          vec2 uv = clamp(ip / uImg, vec2(0.0005), vec2(0.9995)); uv.y = 1.0 - uv.y;
-          vec3 c = texture2D(uTex, uv).rgb;
-          vec2 q = vUv - 0.5; c *= 1.0 - 0.35 * dot(q, q) * 2.0;         // gentle vignette so the HUD panels sit well
-          gl_FragColor = vec4(c, 1.0);
-          #include <colorspace_fragment>
-        }` }));
+    this.bgMat = backdropMaterial(bgTex);
+    this.bg = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.bgMat.material);
     this.bg.frustumCulled = false; this.bg.renderOrder = -100;
     s.add(this.bg);
     s.background = null;
@@ -625,15 +613,17 @@ export class SkinScreen {
     const gear = (this.getGear?.() || []).map((g) => ({ kind: 'gear', grade: { co: 'GEAR', n: '', word: '' }, ...g }));
     for (const g of gear) if (!g.img && g.object) g.img = this.modelThumb(g.object, g.rarity);
     const raf = (this.getRaffles?.() || []).map((r) => ({ kind: 'raffle', rarity: 'legendary', color: RARITY.legendary.color, owned: true, ...r }));
-    this.modelThumbs ||= new Map();
-    for (const r of raf) if (r.object) {
-      if (!this.modelThumbs.has(r.modelUrl)) { try { this.modelThumbs.set(r.modelUrl, this.modelThumb(r.object, 'legendary', -0.35)); } catch (_) {} }
-      r.mthumb = this.modelThumbs.get(r.modelUrl);
-    }
+    for (const r of raf) if (r.object) { try { r.mthumb = this.modelThumb(r.object, 'legendary', -0.35); } catch (_) {} }   // cached per model
     return [...loot, ...gear.filter((g) => g.owned), ...gear.filter((g) => !g.owned), ...raf];
   }
   /** a card portrait of a 3D object (3/4 view, rarity backdrop) as a data URL */
   modelThumb(obj, rarity = 'rare', turn = -0.7) {
+    this.thumbCache ||= new Map();   // one render per model + angle (re-opening the Collection reuses it)
+    const key = obj.uuid + ':' + rarity + ':' + turn;
+    if (this.thumbCache.has(key)) return this.thumbCache.get(key);
+    // WebGPU preview build: three r170 can't read a rendered target back synchronously (and its async readback came
+    // back empty here), so cards keep placeholder art there; the 3D model on the stand is unaffected
+    if (this.renderer.isWebGPURenderer) { const ph = placeholderArt(''); this.thumbCache.set(key, ph); return ph; }
     const r = this.renderer, tw = 216, th = 252, R = RARITY[rarity] || RARITY.rare;
     const sc = new THREE.Scene(); sc.environment = this.scene.environment;
     sc.background = canvasTex(256, 300, (q, w, h) => { const gr = q.createRadialGradient(w / 2, h * 0.42, 10, w / 2, h * 0.5, h * 0.8); gr.addColorStop(0, R.bg[0]); gr.addColorStop(1, R.bg[1]); q.fillStyle = gr; q.fillRect(0, 0, w, h); });
@@ -641,15 +631,16 @@ export class SkinScreen {
     const o = this.fitObject(obj.clone(true), 1.0); o.rotation.y = turn; sc.add(o);
     const box = new THREE.Box3().setFromObject(o), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()).length();
     const cam = new THREE.PerspectiveCamera(30, tw / th, 0.01, 50); cam.position.set(c.x + size * 0.55, c.y + size * 0.45, c.z + size * 1.6); cam.lookAt(c);
-    const rt = new THREE.WebGLRenderTarget(tw * 2, th * 2, { samples: 4 }); rt.texture.colorSpace = THREE.SRGBColorSpace;
+    const W = tw * 2, H = th * 2;
+    const rt = new THREE.WebGLRenderTarget(W, H, { samples: 4 }); rt.texture.colorSpace = THREE.SRGBColorSpace;
     const prevT = r.toneMapping, prevE = r.toneMappingExposure; r.toneMapping = THREE.NeutralToneMapping; r.toneMappingExposure = 1;
     r.setRenderTarget(rt); r.clear(); r.render(sc, cam);
-    const px = new Uint8Array(tw * 2 * th * 2 * 4); r.readRenderTargetPixels(rt, 0, 0, tw * 2, th * 2, px); r.setRenderTarget(null);
+    const px = new Uint8Array(W * H * 4); r.readRenderTargetPixels(rt, 0, 0, W, H, px); r.setRenderTarget(null);
     r.toneMapping = prevT; r.toneMappingExposure = prevE; rt.dispose(); sc.background.dispose();
-    const cv = document.createElement('canvas'); cv.width = tw * 2; cv.height = th * 2; const g = cv.getContext('2d'), img = g.createImageData(tw * 2, th * 2);
-    for (let y = 0; y < th * 2; y++) img.data.set(px.subarray((th * 2 - 1 - y) * tw * 8, (th * 2 - y) * tw * 8), y * tw * 8);   // flip rows
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'), img = g.createImageData(W, H);
+    for (let y = 0; y < H; y++) img.data.set(px.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);   // flip rows
     g.putImageData(img, 0, 0);
-    return cv.toDataURL('image/webp', 0.86);
+    const url = cv.toDataURL('image/webp', 0.86); this.thumbCache.set(key, url); return url;
   }
   /** scale an object so its largest side is `size` m, base on y = 0, centred */
   fitObject(o, size) {
@@ -821,7 +812,7 @@ export class SkinScreen {
     const P0 = new THREE.Vector3(0, 0, 0).project(this.cam), P1 = new THREE.Vector3(1.3, 0, 0).project(this.cam);
     const sx = (v) => (v.x * 0.5 + 0.5) * size.x, sy = (v) => (0.5 - v.y * 0.5) * size.y;
     const pxPerM = Math.abs(sx(P1) - sx(P0)) / 1.3;
-    const u = this.bg.material.uniforms;
+    const u = { uScale: this.bgMat.scale, uAnchor: this.bgMat.anchor, uScreen: this.bgMat.screen };
     const cover = Math.max(size.x / 2576, size.y / 1438) * 1.02;
     u.uScale.value = Math.max(cover, pxPerM * 2.6 / 830) * pr;
     u.uAnchor.value.set(sx(P0) * pr, sy(P0) * pr);
