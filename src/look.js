@@ -201,7 +201,9 @@ export class Look {
     if (this.aoEnabled) {
       const ao = new N8AOPostPass(scene, camera, w, h);
       ao.setQualityMode(high ? 'Medium' : 'Low');
-      Object.assign(ao.configuration, { aoRadius: 2.2, distanceFalloff: 1.0, intensity: 2.2, halfRes: !high, depthAwareUpsampling: true,
+      // full resolution on every tier: half-res AO (MEDIUM used it) upscales into blocky patches and soft dark
+      // halos offset from thin objects that trail as the camera moves ("ghost shadows"); 'Low' mode keeps MEDIUM cheap
+      Object.assign(ao.configuration, { aoRadius: 2.2, distanceFalloff: 1.0, intensity: 2.2, halfRes: false, depthAwareUpsampling: true,
         transparencyAware: false, gammaCorrection: false, color: new THREE.Color(0x0a0c14) });
       composer.addPass(ao); this.passes.ao = ao;
     }
