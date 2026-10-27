@@ -46,6 +46,14 @@
     {
       "source": "/webgpu",
       "destination": "/webgpu.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
     }
   ]
 }
