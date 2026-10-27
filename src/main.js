@@ -42,10 +42,14 @@ import { prizeChain, prizeIssuer } from './chains.js';
 import QRCode from 'qrcode';
 import { TREASURY, AD_DAYS, adPrice } from './treasury.js';
 import { session } from './net.js';
+import { LoginScreen } from './login.js';
+import { accountsOn, xAccount, signInWithX, finishXReturn, signOutX, syncCloud, pushCloud } from './account.js';
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
+// X sign-in return + cloud save check, started right away (runs while assets load; awaited before progress loads)
+const acctReady = accountsOn() ? (async () => ({ ret: await finishXReturn(), reload: await syncCloud() }))().catch((e) => { console.warn('account', e); return null; }) : Promise.resolve(null);
 const FIXED_DT = params.has('fixeddt') ? (parseFloat(params.get('fixeddt')) || 1 / 30) : 0;   // deterministic stepping for automated tests
 fx.enabled = !FIXED_DT && !params.has('nofade');   // screen fades (tests take screenshots straight away)
 
@@ -291,6 +295,10 @@ const setLook = (name) => {
 };
 document.getElementById('lookbtn')?.addEventListener('click', () => setLook(ORDER[(ORDER.indexOf(lookName) + 1) % ORDER.length]));
 Progress.unlockAll = params.has('unlockall');   // testing: every level gate open
+// a signed-in player whose cloud save is further along than this device: it was just written locally; restart on it
+const acct0 = await acctReady;
+if (acct0?.ret?.status === 'redirecting') await new Promise(() => {});   // on the way to X
+if (acct0?.reload) { location.reload(); await new Promise(() => {}); }
 const progress = new Progress();
 const profile = () => ({ tag: progress.tier[1], name: progress.s.name, level: progress.s.level });
 const player = new Player(CHARS[charId], world.physics, world.spawn, profile());
@@ -1295,7 +1303,33 @@ const syncHolder = () => {
 };
 wallet.onChange(syncHolder); syncHolder();
 const openSkins = () => { if (skins.isOpen) return; sfx.play('whoosh'); fx.through(() => { $('loader').hidden = true; $('hud').hidden = true; $('emotewheel').hidden = true; hud.closeModal(); skins.openNow('skins'); }, 220, 450); };
-if (params.has('autostart')) start(); else openSkins();
+// ---- login screen (website): sign in with X or play as guest, then the skin screen
+const loginScreen = accountsOn() ? new LoginScreen() : null;
+const xBtn = $('xbtn');
+let account = null;
+const cleanName = (h) => String(h || '').replace(/[^\w.-]/g, '').slice(0, 16);
+async function refreshAccount() {
+  account = await xAccount();
+  if (xBtn) { xBtn.hidden = !loginScreen; xBtn.textContent = account?.linked ? '𝕏 @' + (account.handle || 'SIGNED IN') : '𝕏 SIGN IN'; xBtn.classList.toggle('on', !!account?.linked); }
+  // first visit after signing in: the X handle becomes the player name (changeable on the skin screen)
+  if (account?.linked && account.handle && !progress.s.nameSet) { progress.s.name = cleanName(account.handle); progress.s.nameSet = true; progress.save(); player.refreshPlate(profile()); lb.saveProfile(); }
+  return account;
+}
+const showLogin = async (inGame = false) => {
+  if (!loginScreen) return 'guest';
+  await refreshAccount();
+  const msg = acct0?.ret?.status === 'error' ? `X sign-in didn't finish: ${acct0.ret.message}` : null; if (acct0?.ret) acct0.ret = null;
+  return loginScreen.show({ account, message: msg, inGame, onX: () => signInWithX(), onSignOut: async () => { await pushCloud(true); await signOutX(); location.reload(); } });
+};
+xBtn?.addEventListener('click', () => { if (!skins.isOpen && !inGame()) showLogin(true); });
+if (loginScreen) {   // keep the cloud copy fresh for signed-in players
+  setInterval(() => pushCloud(), 60e3);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pushCloud(true); });
+  if (acct0?.ret?.status === 'ok') { const h = acct0.ret.account?.handle; setTimeout(() => hud.toast(`SIGNED IN WITH X${h ? ' · @' + h : ''}`), 1500); }
+}
+if (params.has('autostart')) start();
+else if (loginScreen) { $('loader').hidden = true; showLogin().then(openSkins); }
+else openSkins();
 window.__bagverse = { GFX, exportMap: () => import('./mapexport.js').then((m) => m.exportMap({ scene, trees })), openAdSlot, liveAds, fx, openCollection, raffles, openVault, tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
 
 // slow-frame guard: after a short warm-up, a few seconds under ~22 fps sheds the heaviest effects live
@@ -1392,7 +1426,7 @@ function frame() {
     hud.update(dt);
   }
   input.endFrame();
-  composer.render(dt);
+  if (!loginScreen || loginScreen.el.hidden || loginScreen.el.classList.contains('ingame')) composer.render(dt);   // the login art covers the screen: don't draw the city behind it
   fpsAcc += realDt; fpsN++;
   if (fpsAcc > 1) { window.__fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; adapt(window.__fps); }
   window.__frames = (window.__frames || 0) + 1;

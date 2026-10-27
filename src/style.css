@@ -689,10 +689,18 @@ body.in-run .mpmark { opacity: .6; }
 #walletbtn { pointer-events: auto; background: var(--panel); border: 1px solid #9945ff; border-radius: 10px; padding: 6px 14px; color: #c9a6ff; font: 700 13px "Rajdhani", sans-serif; letter-spacing: 1px; cursor: pointer; }
 #walletbtn:hover, #walletbtn:focus-visible { background: rgba(153,69,255,.18); outline: none; }
 #walletbtn.on { border-color: #14f195; color: #14f195; }
+#xbtn { pointer-events: auto; background: var(--panel); border: 1px solid #e7e9ea; border-radius: 10px; padding: 6px 14px; color: #f4f6f8; font: 700 13px "Rajdhani", sans-serif; letter-spacing: 1px; cursor: pointer; }
+#xbtn:hover, #xbtn:focus-visible { background: rgba(255,255,255,.12); outline: none; }
+#xbtn.on { border-color: #7cff3d; color: #b6ff7a; }
+#xbtn[hidden] { display: none; }
 body.touch #walletbtn { display: none; position: absolute; z-index: 2; min-width: 128px; padding: 10px 14px; font-size: 14px; text-align: left;
   right: calc(var(--r) + var(--btn) + var(--gap)); top: calc(var(--t) + var(--mm) + var(--gap) + 26px + 14px + 4 * (var(--btn) + var(--gap)) - 68px); }
 body.touch #hud.menu-open #walletbtn { display: block; }
 @media (orientation: landscape) and (max-height: 540px) { body.touch #walletbtn { right: calc(var(--r) + var(--mm) + 14px); top: calc(var(--t) + var(--btn) + var(--gap) + 172px); } }
+body.touch #xbtn { display: none; position: absolute; z-index: 2; min-width: 128px; padding: 10px 14px; font-size: 14px; text-align: left;
+  right: calc(var(--r) + var(--btn) + var(--gap)); top: calc(var(--t) + var(--mm) + var(--gap) + 26px + 14px + 4 * (var(--btn) + var(--gap)) - 20px); }
+body.touch #hud.menu-open #xbtn:not([hidden]) { display: block; }
+@media (orientation: landscape) and (max-height: 540px) { body.touch #xbtn { right: calc(var(--r) + var(--mm) + 14px); top: calc(var(--t) + var(--btn) + var(--gap) + 220px); } }
 .wl-list { display: grid; gap: 8px; margin: 10px 0; }
 .wl-w { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(153,69,255,.5); background: rgba(153,69,255,.1);
   color: #fff; font: 700 16px "Rajdhani", sans-serif; letter-spacing: .5px; text-decoration: none; cursor: pointer; text-align: left; box-sizing: border-box; }
@@ -773,3 +781,44 @@ body.touch #skins .sl-lbl { justify-content: space-between; }
 
 #modal .rf-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
 #modal .rf-tabs button { padding: 6px 12px; font-size: 13px; }
+
+/* ===== login screen (website): key art + sign-in panel ===== */
+#login { position: fixed; inset: 0; z-index: 120; overflow: hidden; background: #07040f; font-family: "Rajdhani", sans-serif; }
+#login[hidden] { display: none; }
+#login.ingame { z-index: 400; }
+/* wide screens: the art covers the viewport anchored right (the character), and the panel sits exactly in the art's
+   glowing frame (left 7.2%, 12-88% tall in the 2576x1438 picture) under its own BAGVERSE logo */
+#login .lg-stage { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: max(100vw, 179.14vh); height: max(100vh, 55.82vw); }
+#login .lg-art { position: absolute; inset: 0; background: var(--lg-bg) center / 100% 100% no-repeat; }
+#login .lg-panel { position: absolute; left: 7.6%; top: 27.5%; width: 28.4%; height: 57%; display: flex; flex-direction: column; justify-content: center; padding: 0 2.2%; box-sizing: border-box; }
+#login .lg-logo { display: none; }
+#login .lg-body { display: flex; flex-direction: column; gap: clamp(8px, 1.3vh, 14px); }
+#login .lg-tag { color: #3dfff0; font-weight: 700; letter-spacing: .3em; font-size: clamp(12px, 1.5vh, 16px); text-shadow: 0 0 10px rgba(61,255,240,.5); margin-bottom: 4px; }
+#login .lg-tag i { font-style: normal; color: #07040f; background: #3dfff0; padding: 1px 7px; border-radius: 4px; margin-left: 6px; letter-spacing: .2em; font-size: .85em; }
+#login .lg-btn { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: clamp(48px, 6.4vh, 60px); border-radius: 12px; cursor: pointer;
+  font: 700 clamp(17px, 2.1vh, 21px) "Rajdhani", sans-serif; letter-spacing: .06em; transition: transform .12s ease, box-shadow .2s ease, background .2s ease; }
+#login .lg-btn:hover:not(:disabled) { transform: translateY(-1px); }
+#login .lg-btn:disabled { opacity: .7; cursor: default; }
+#login .lg-x { background: #f4f6f8; color: #0b0c10; border: 0; box-shadow: 0 0 0 1px rgba(255,255,255,.6), 0 0 24px rgba(124,255,61,.35); }
+#login .lg-x:hover:not(:disabled) { box-shadow: 0 0 0 2px #7cff3d, 0 0 30px rgba(124,255,61,.6); }
+#login .lg-x svg { width: 20px; height: 20px; }
+#login .lg-x img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
+#login .lg-guest { background: rgba(124,255,61,.08); color: #b6ff7a; border: 1.5px solid #7cff3d; box-shadow: inset 0 0 18px rgba(124,255,61,.12); }
+#login .lg-guest:hover { background: rgba(124,255,61,.18); }
+#login .lg-note { margin: 4px 0 0; color: #c9d2de; font: 600 clamp(13px, 1.55vh, 16px) / 1.4 "Rajdhani", sans-serif; }
+#login .lg-link { background: none; border: 0; color: #3dfff0; font: 700 15px "Rajdhani", sans-serif; letter-spacing: .05em; cursor: pointer; align-self: flex-start; padding: 0; text-decoration: underline; }
+#login .lg-err { margin: 0; color: #ff8aa6; font: 600 14px / 1.35 "Rajdhani", sans-serif; }
+#login .lg-err[hidden] { display: none; }
+#login .lg-legal { margin: 6px 0 0; color: #8f9bb0; font: 600 13px / 1.4 "Rajdhani", sans-serif; }
+#login .lg-legal a { color: #b6ff7a; }
+/* tall / narrow screens: the art crops to the character; the panel becomes a glass card with its own logo */
+@media (max-aspect-ratio: 3/2) {
+  #login .lg-stage { inset: 0; transform: none; width: auto; height: auto; }
+  #login .lg-art { background: var(--lg-bg-m) 78% center / cover no-repeat; }
+  #login .lg-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,4,15,0) 35%, rgba(7,4,15,.85) 72%, #07040f 100%); }
+  #login .lg-panel { left: 50%; transform: translateX(-50%); top: auto; bottom: max(16px, env(safe-area-inset-bottom)); width: min(440px, calc(100vw - 32px)); height: auto; padding: 20px 18px 16px;
+    background: rgba(10,14,20,.72); border: 1.5px solid rgba(124,255,61,.75); border-radius: 18px; box-shadow: 0 0 28px rgba(124,255,61,.25), inset 0 0 24px rgba(124,255,61,.08); backdrop-filter: blur(6px); }
+  #login .lg-logo { display: block; height: 64px; margin: 0 auto 10px; }
+  #login .lg-tag { text-align: center; }
+}
+@media (max-aspect-ratio: 3/2) and (max-height: 560px) { #login .lg-logo { height: 44px; margin-bottom: 4px; } #login .lg-note { display: none; } }

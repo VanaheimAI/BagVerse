@@ -25,6 +25,11 @@ export async function session() {
   supa ||= initSupabase(); await supa; if (!sb) return null;
   try { const { data } = await sb.auth.getSession(); const s = data?.session; return s?.access_token ? { uid: s.user.id, token: s.access_token } : null; } catch (_) { return null; }
 }
+/** the Supabase client itself (auth: X sign-in, linking), or null off Supabase */
+export async function client() {
+  if (backend() !== 'supabase') return null;
+  supa ||= initSupabase(); await supa; return sb;
+}
 /** Supabase tables: { from(name) } (reads; writes follow each table's RLS rules), or null off Supabase.
  *  (Wrapped on purpose: a query builder is a thenable, so returning one from an async function would run it.) */
 export async function tables() {

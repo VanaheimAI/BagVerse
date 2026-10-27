@@ -144,3 +144,20 @@ drop policy if exists "linked wallets read" on public.linked_wallets;
 create policy "linked wallets read" on public.linked_wallets for select using (true);
 drop policy if exists "linked wallets delete own" on public.linked_wallets;
 create policy "linked wallets delete own" on public.linked_wallets for delete to authenticated using (user_id = auth.uid()::text);
+
+-- ---------------------------------------------------------------- cloud saves (Oct 27)
+-- One row per account: the player's progress, equipped skin and favourites, so signing in with X on another device
+-- brings the same progress back (src/account.js). Each player reads and writes only their own row.
+create table if not exists public.saves (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  data jsonb not null default '{}'::jsonb,
+  level int not null default 1,
+  updated_at timestamptz not null default now()
+);
+alter table public.saves enable row level security;
+drop policy if exists "saves: own row read" on public.saves;
+drop policy if exists "saves: own row insert" on public.saves;
+drop policy if exists "saves: own row update" on public.saves;
+create policy "saves: own row read" on public.saves for select using (auth.uid() = user_id);
+create policy "saves: own row insert" on public.saves for insert with check (auth.uid() = user_id);
+create policy "saves: own row update" on public.saves for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
