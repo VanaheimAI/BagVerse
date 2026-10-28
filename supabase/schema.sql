@@ -209,3 +209,6 @@ create table if not exists public.tag_reports (
   primary key (spot, sprayed_at, reporter)
 );
 alter table public.tag_reports enable row level security;
+
+-- refresh the API's table list so new tables work straight away (fixes "Could not find the table ... in the schema cache")
+notify pgrst, 'reload schema';
