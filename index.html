@@ -4,6 +4,32 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>BagVerse</title>
+  <script>
+  // One address for everyone: bagverse.fun. Visitors on the old vercel.app address or www. are moved there (so
+  // "Sign in with X" always returns to bagverse.fun), bringing this browser's progress with them (browser storage
+  // belongs to one address, so it travels in the link once and is imported on arrival).
+  (function () {
+    var CANON = 'bagverse.fun', OLD = ['bag-verse-ten.vercel.app', 'www.bagverse.fun'];
+    var mine = function (k) { return k && (k.indexOf('bagverse.') === 0 || k.indexOf('bv_') === 0); };
+    try {
+      if (OLD.indexOf(location.host) >= 0 && !/access_token|error_code/.test(location.hash)) {
+        var data = {};
+        for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (mine(k)) data[k] = localStorage.getItem(k); }
+        var pack = Object.keys(data).length ? '#bvmove=' + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(data))))) : '';
+        location.replace('https://' + CANON + location.pathname + location.search + pack);
+        return;
+      }
+      var m = /[#&]bvmove=([^&]+)/.exec(location.hash);
+      if (m) {
+        var got = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
+        var lv = function (v) { try { var p = JSON.parse(v || 'null'); return p ? [p.level | 0, p.totalXp | 0] : [0, 0]; } catch (e) { return [0, 0]; } };
+        var a = lv(got['bagverse.skin']), b = lv(localStorage.getItem('bagverse.skin'));
+        if (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])) for (var key in got) if (mine(key)) localStorage.setItem(key, got[key]);
+        history.replaceState(null, '', location.pathname + location.search);
+      }
+    } catch (e) {}
+  })();
+  </script>
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>

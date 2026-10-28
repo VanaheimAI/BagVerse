@@ -1029,7 +1029,7 @@ function openVault(zid, label, raffleId = null) {
         ${pz.mint && prizeChain(pz) === 'solana' ? `<div class="row"><span>Mint</span><b title="${escR(pz.mint)}">${escR(shortMint(pz.mint))}</b></div>` : ''}
         ${prizeChain(pz) === 'polygon' && pz.token_id ? `<div class="row"><span>Token</span><b title="${escR(pz.contract || '')} #${escR(pz.token_id)}">#${escR(String(pz.token_id).slice(0, 10))}${String(pz.token_id).length > 10 ? '…' : ''}</b></div>` : ''}
         ${/^https:\/\//.test(pz.url || '') ? `<a class="rwa-link" href="${escR(pz.url)}" target="_blank" rel="noopener noreferrer">VIEW THE CARD ↗</a>` : ''}
-      </div></div>` : `<p>${raffles.offline ? 'Raffles run on the BagVerse website (bag-verse-ten.vercel.app).' : raffles.ready ? `No ${onepiece ? 'One Piece' : 'Pokémon'} raffle is open right now. The next slab is announced here.` : 'Loading raffles…'}</p>`;
+      </div></div>` : `<p>${raffles.offline ? 'Raffles run on the BagVerse website (bagverse.fun).' : raffles.ready ? `No ${onepiece ? 'One Piece' : 'Pokémon'} raffle is open right now. The next slab is announced here.` : 'Loading raffles…'}</p>`;
   const w = wallet.status === 'verified', entered = r && raffles.entered(r.id);
   let action = '';
   if (r) {
