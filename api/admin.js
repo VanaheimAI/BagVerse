@@ -16,6 +16,9 @@
 //   ad_reinstate { id }                                  -> put a pulled ad back (if not refunded)
 //   refund_prepare { id }                               -> what the dashboard needs to build the USDC refund
 //   refund_done  { id, signature }                       -> confirm the refund on-chain (status 'refunded')
+//   tags                                                -> Spray Spots: current tags (most reported first) + recent history
+//   tag_hide     { spot, hidden }                       -> hide a tag (or restore it, clearing its reports)
+//   tag_clear    { spot }                               -> wipe a wall (logged)
 import crypto from 'node:crypto';
 import { admin, hostOf, readBody, send } from './_lib/wallet.js';
 import { checkLogin, checkToken } from './_lib/admin.js';
@@ -170,6 +173,12 @@ export default async function handler(req, res, deps = {}) {
         await q(sb.from('ad_bookings').update({ status: a.status === 'pending' ? 'paid' : a.status, signature: pay.signature, paid_amount: pay.amount, payer_address: pay.payer, payer_token_account: pay.from }).eq('id', a.id));
         return send(res, 200, { paid: true, ...pay });
       }
+      // Spray Spots moderation: every wall's current tag (reported first), hide / restore / clear
+      case 'tags': return send(res, 200, { tags: await q(sb.from('tags').select('*').order('reports', { ascending: false }).limit(500)),
+        log: await q(sb.from('tag_log').select('*').order('at', { ascending: false }).limit(100)) });
+      case 'tag_hide': { const spot = clean(body.spot, 40); await q(sb.from('tags').update({ hidden: !!body.hidden, ...(body.hidden ? {} : { reports: 0 }) }).eq('spot', spot)); return send(res, 200, { ok: true }); }
+      case 'tag_clear': { const spot = clean(body.spot, 40); const cur = await q(sb.from('tags').select('owner, handle').eq('spot', spot).maybeSingle());
+        await q(sb.from('tags').delete().eq('spot', spot)); if (cur) await sb.from('tag_log').insert({ spot, owner: cur.owner, handle: cur.handle, kind: 'cleared', at: new Date().toISOString() }); return send(res, 200, { ok: true }); }
       default: return send(res, 400, { error: 'Unknown op.' });
     }
   } catch (e) { return send(res, 500, { error: e.message }); }

@@ -84,6 +84,16 @@ export class Physics {
     return hit && hit.distance <= far ? hit.distance : Infinity;
   }
 
+  /** first hit along a ray with its world point and face normal, or null (spot finding / tools) */
+  raycastHit(origin, dir, far) {
+    _ray.set(origin, dir); _ray.far = far; _ray.firstHitOnly = true;
+    const hit = this.bvh.raycastFirst(_ray.ray, THREE.DoubleSide);
+    if (!hit || hit.distance > far) return null;
+    const n = hit.face ? hit.face.normal.clone() : new THREE.Vector3(-dir.x, -dir.y, -dir.z);
+    if (n.dot(dir) > 0) n.negate();
+    return { distance: hit.distance, point: hit.point.clone(), normal: n };
+  }
+
   /** ground height under a point (for spawning / teleport) */
   groundAt(x, z, fromY = 200) {
     _ray.set(new THREE.Vector3(x, fromY, z), new THREE.Vector3(0, -1, 0));

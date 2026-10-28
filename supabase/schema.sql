@@ -161,3 +161,51 @@ drop policy if exists "saves: own row update" on public.saves;
 create policy "saves: own row read" on public.saves for select using (auth.uid() = user_id);
 create policy "saves: own row insert" on public.saves for insert with check (auth.uid() = user_id);
 create policy "saves: own row update" on public.saves for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------- Spray Spots (X-handle graffiti tags on walls)
+-- One row per wall (spot ids: src/tagspots.js). Everyone can read; only the server (api/tag.js, service role) writes,
+-- after checking the player's X identity, level, cooldowns and locks. A tag "fades" 72 h after touched_at.
+create table if not exists public.tags (
+  spot text primary key,
+  owner uuid not null references auth.users (id) on delete cascade,
+  x_id text,
+  handle text not null,
+  avatar text,
+  style jsonb not null default '{}'::jsonb,
+  sprayed_at timestamptz not null default now(),
+  touched_at timestamptz not null default now(),
+  reports int not null default 0,
+  hidden boolean not null default false
+);
+create index if not exists tags_owner on public.tags (owner);
+alter table public.tags enable row level security;
+drop policy if exists "tags read" on public.tags;
+create policy "tags read" on public.tags for select using (true);
+
+-- history (overwrites power the "you got sprayed over" inbox; also the admin's undo trail)
+create table if not exists public.tag_log (
+  id bigint generated always as identity primary key,
+  spot text not null,
+  owner uuid references auth.users (id) on delete set null,
+  handle text,
+  kind text not null default 'spray',           -- spray | touch | removed | cleared
+  style jsonb,
+  prev_owner uuid references auth.users (id) on delete set null,
+  prev_handle text,
+  at timestamptz not null default now()
+);
+create index if not exists tag_log_prev on public.tag_log (prev_owner, at desc);
+create index if not exists tag_log_owner on public.tag_log (owner, at desc);
+alter table public.tag_log enable row level security;
+drop policy if exists "tag log read" on public.tag_log;
+create policy "tag log read" on public.tag_log for select using (true);
+
+-- reports (server only: no read policy, so players can't see who reported whom)
+create table if not exists public.tag_reports (
+  spot text not null,
+  sprayed_at timestamptz not null,
+  reporter uuid not null references auth.users (id) on delete cascade,
+  at timestamptz not null default now(),
+  primary key (spot, sprayed_at, reporter)
+);
+alter table public.tag_reports enable row level security;

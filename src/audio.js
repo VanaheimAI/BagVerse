@@ -24,6 +24,7 @@ export const SLOTS = {
   jump:     { src: 'Fast Whoosh (5975)', bus: 'sfx', vol: 0.35 },
   whoosh:   { src: 'Airy Transition Whoosh (5915)', bus: 'sfx', vol: 0.45 },
   poof:     { src: 'Magic Poof (741)', bus: 'sfx', vol: 0.55 },
+  spray:    { src: 'Spray Can', bus: 'sfx', vol: 0.55, lazy: true },   // synth (can rattle + hiss) until a file is added
   scratch:  { src: 'Single Record Scratch (1366)', bus: 'sfx', vol: 0.6 },
   brake:    { src: 'Bicycle Brake Noises (1470)', bus: 'sfx', vol: 0.4 },
   // loops
@@ -168,6 +169,7 @@ const SYNTH = {
   scandeny: (c, o) => { const t = c.currentTime; tone(c, o, 330, t, 0.12, 'square', 0.15); tone(c, o, 247, t + 0.14, 0.2, 'square', 0.15); },
   jump: (c, o, n, r) => noiseBurst(c, o, n, c.currentTime, 0.22, { f: 500 * r, f2: 2200 * r, q: 1.2, peak: 0.35 }),
   whoosh: (c, o, n) => noiseBurst(c, o, n, c.currentTime, 0.45, { f: 300, f2: 3000, q: 0.8, peak: 0.4 }),
+  spray: (c, o, n) => { const t = c.currentTime; for (let i = 0; i < 4; i++) tone(c, o, 2300 + Math.random() * 700, t + i * 0.075, 0.03, 'square', 0.07); noiseBurst(c, o, n, t + 0.32, 1.3, { type: 'highpass', f: 5200, f2: 3800, q: 0.7, peak: 0.32 }); },
   poof: (c, o, n) => { noiseBurst(c, o, n, c.currentTime, 0.4, { type: 'lowpass', f: 3000, f2: 300, peak: 0.6 }); tone(c, o, 120, c.currentTime, 0.25, 'sine', 0.4, 0.5); },
   scratch: (c, o, n) => { const t = c.currentTime; noiseBurst(c, o, n, t, 0.18, { f: 900, f2: 2600, q: 4, peak: 0.5 }); noiseBurst(c, o, n, t + 0.16, 0.22, { f: 2600, f2: 700, q: 4, peak: 0.45 }); },
   brake: (c, o, n) => noiseBurst(c, o, n, c.currentTime, 0.5, { type: 'bandpass', f: 4200, f2: 3000, q: 8, peak: 0.25 }),

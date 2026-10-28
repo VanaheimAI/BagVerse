@@ -6,7 +6,7 @@ export function fakeAdmin() {
   return {
     db,
     storage: { getBucket: async () => ({ data: { name: 'prizes' } }), createBucket: async () => ({}), from: () => ({ upload: async () => ({ error: null }), getPublicUrl: (p) => ({ data: { publicUrl: 'https://example.supabase.co/storage/v1/object/public/prizes/' + p } }) }) },
-    auth: { getUser: async (t) => (t?.startsWith('tok-') ? { data: { user: { id: t.slice(4) } }, error: null } : { data: null, error: { message: 'bad jwt' } }) },
+    auth: { getUser: async (t) => (t?.startsWith('tok-') ? { data: { user: { id: t.slice(4), identities: (db.__xusers || {})[t.slice(4)] ? [db.__xusers[t.slice(4)]] : [] } }, error: null } : { data: null, error: { message: 'bad jwt' } }) },
     from(name) {
       const rows = T(name), f = []; let op = 'select', val = null, countMode = false, head = false, ord = null, lim = 1e9;
       const match = () => { let m = rows.filter((r) => f.every(([k, v, how]) => (how === 'neq' ? r[k] !== v : how === 'lte' ? r[k] <= v : how === 'in' ? v.includes(r[k]) : r[k] === v)));

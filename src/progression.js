@@ -39,6 +39,7 @@ export const REWARDS = [
   { lv: 3, label: 'Portal previews (Bag Run & co.)', gate: 'portals' },
   { lv: 4, label: 'Nameplate colour: Mint' },
   { lv: 5, label: 'Punk Scooter + garage', gate: 'scooter' },
+  { lv: 5, label: 'Spray Spots: tag walls with your X handle', gate: 'tagging' },
   { lv: 6, label: 'Title: Fresh Bag' },
   { lv: 7, label: 'Chat bubble: Neon' },
   { lv: 8, label: 'Nameplate colour: Sunset' },
@@ -65,7 +66,7 @@ export const REWARDS = [
 export const TITLES = { 6: 'Fresh Bag', 20: 'Ape-In', 50: 'Diamond Paws', 250: 'Diamond Hands' };
 
 const LOGIN_XP = [25, 40, 55, 70, 90, 110, 150];
-const CAPS = { billboard: 250, flashmob: 200, gm: 25, social: 200 };   // per day
+const CAPS = { billboard: 250, flashmob: 200, gm: 25, social: 200, tag: 225 };   // per day
 export const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export function weekKey(d = new Date()) {   // Monday-start week
   const t = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const wd = (t.getDay() + 6) % 7; t.setDate(t.getDate() - wd); return dayKey(t);
@@ -112,6 +113,7 @@ export class Progress {
   /** feature gates (REWARDS[].gate). `?unlockall` opens everything for testing. */
   has(gate) {
     if (Progress.unlockAll) return true;
+    if (gate === 'tagging' && !this.s.xLinked) return false;   // tags carry your X handle: Sign in with X first
     const r = REWARDS.find((x) => x.gate === gate);
     return !r || this.s.level >= r.lv;
   }

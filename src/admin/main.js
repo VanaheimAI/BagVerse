@@ -68,7 +68,7 @@ async function renderShell() {
     <header class="top"><div class="logo">BAGVERSE</div><h1>ADMIN</h1><div class="chips" id="chips"></div><span class="sp"></span>
       <span class="who">${short(who)}</span><a class="btn sm" href="/" target="_blank">OPEN GAME ↗</a><button class="btn sm" id="out">SIGN OUT</button></header>
     <div id="banner"></div>
-    <nav class="tabs">${[['raffles', 'RAFFLES'], ['entries', 'ENTRIES & WINNERS'], ['players', 'PLAYERS'], ['ads', 'ADS']].map(([k, l]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</nav>
+    <nav class="tabs">${[['raffles', 'RAFFLES'], ['entries', 'ENTRIES & WINNERS'], ['players', 'PLAYERS'], ['ads', 'ADS'], ['tags', 'TAGS']].map(([k, l]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</nav>
     <main id="main"></main></div>`;
   $('#out').onclick = signOut;
   app.querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => { tab = b.dataset.t; app.querySelectorAll('[data-t]').forEach((x) => x.classList.toggle('on', x === b)); show(); }));
@@ -81,7 +81,22 @@ async function overview() {
     $('#banner').innerHTML = o.missing ? `<div class="banner"><b>Database tables missing.</b> Run the "vault raffles + ad bookings" block of <span class="mono">supabase/schema.sql</span> in Supabase (SQL Editor → New query → Run), then reload.</div>` : '';
   } catch (e) { toast(e.message, true); }
 }
-function show() { ({ raffles: showRaffles, entries: showEntries, players: showPlayers, ads: showAds })[tab](); }
+function show() { ({ raffles: showRaffles, entries: showEntries, players: showPlayers, ads: showAds, tags: showTags })[tab](); }
+
+// ------------------------------------------------------------------ Spray Spots (X-handle tags on walls)
+async function showTags() {
+  const main = $('#main');
+  main.innerHTML = `<section class="card"><h2>TAGS</h2><p class="hint">Players' X handles sprayed on walls. 3 reports hide a tag automatically; restore it if it's fine, or clear the wall.</p><div id="tbody"><p class="empty">Loading…</p></div></section>
+    <section class="card"><h2>RECENT</h2><div id="tlog"></div></section>`;
+  let d; try { d = await api('tags'); } catch (e) { $('#tbody').innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+  $('#tbody').innerHTML = `<div class="tablewrap"><table><thead><tr><th>WALL</th><th>TAG</th><th>SPRAYED</th><th>REPORTS</th><th>STATUS</th><th></th></tr></thead><tbody>
+    ${d.tags.map((t) => `<tr><td class="mono">${esc(t.spot)}</td><td>${t.avatar ? `<img src="${esc(t.avatar)}" referrerpolicy="no-referrer" style="width:28px;height:28px;border-radius:50%;vertical-align:middle;margin-right:8px">` : ''}<a href="https://x.com/${esc(t.handle)}" target="_blank" rel="noopener">@${esc(t.handle)}</a></td>
+      <td>${ago(t.sprayed_at)}</td><td>${t.reports ? `<b style="color:var(--red)">${t.reports}</b>` : 0}</td><td>${t.hidden ? '<b style="color:var(--red)">HIDDEN</b>' : 'live'}</td>
+      <td class="split"><button class="btn sm" data-hide="${esc(t.spot)}" data-v="${t.hidden ? '' : '1'}">${t.hidden ? 'RESTORE' : 'HIDE'}</button><button class="btn sm" data-clear="${esc(t.spot)}">CLEAR WALL</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">No tags yet.</td></tr>'}</tbody></table></div>`;
+  $('#tlog').innerHTML = (d.log || []).map((l) => `<p class="hint">${ago(l.at)} · <b>@${esc(l.handle || '?')}</b> ${esc(l.kind)} <span class="mono">${esc(l.spot)}</span>${l.prev_handle ? ` over @${esc(l.prev_handle)}` : ''}</p>`).join('') || '<p class="empty">Nothing yet.</p>';
+  main.querySelectorAll('[data-hide]').forEach((b) => (b.onclick = async () => { try { await api('tag_hide', { spot: b.dataset.hide, hidden: !!b.dataset.v }); toast('Saved'); showTags(); } catch (e) { toast(e.message, true); } }));
+  main.querySelectorAll('[data-clear]').forEach((b) => (b.onclick = async () => { if (!confirm(`Clear the wall ${b.dataset.clear}?`)) return; try { await api('tag_clear', { spot: b.dataset.clear }); toast('Wall cleared'); showTags(); } catch (e) { toast(e.message, true); } }));
+}
 
 // ------------------------------------------------------------------ raffles
 let editing = null;

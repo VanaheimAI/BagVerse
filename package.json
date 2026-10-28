@@ -24,8 +24,11 @@
     "build:scooter": "blender -b -P blender/export_scooter.py -- blender/scooter/punk_scooter_3d_model.fbx public/assets/scooter.glb && gltf-transform resize public/assets/scooter.glb public/assets/scooter.glb --width 1024 --height 1024 && gltf-transform webp public/assets/scooter.glb public/assets/scooter.glb --quality 86 && gltf-transform meshopt public/assets/scooter.glb public/assets/scooter.glb && gltf-transform resize public/assets/scooter.glb public/assets/scooter.m.glb --width 512 --height 512 && gltf-transform meshopt public/assets/scooter.m.glb public/assets/scooter.m.glb"
   },
   "dependencies": {
+    "@fontsource/bungee": "^5.3.0",
     "@fontsource/permanent-marker": "^5.3.0",
     "@fontsource/rajdhani": "^5.3.0",
+    "@fontsource/rubik-wet-paint": "^5.3.0",
+    "@fontsource/sedgwick-ave-display": "^5.3.0",
     "@solana-mobile/wallet-standard-mobile": "^0.7.0",
     "@solana/web3.js": "^1.99.0",
     "@supabase/supabase-js": "^2.118.0",

@@ -96,6 +96,7 @@ export class HUD {
       const x = (m.x + 200) * k, y = (m.z + 200) * k;
       g.fillStyle = m.color; g.strokeStyle = m.color;
       if (m.shape === 'diamond') { g.beginPath(); g.moveTo(x, y - 4.5); g.lineTo(x + 3.5, y); g.lineTo(x, y + 4.5); g.lineTo(x - 3.5, y); g.closePath(); g.fill(); }
+      else if (m.shape === 'tag') { g.save(); g.translate(x, y); g.rotate(-0.35); g.fillRect(-4, -2.5, 8, 5); g.strokeStyle = '#120a1e'; g.lineWidth = 1; g.strokeRect(-4, -2.5, 8, 5); g.restore(); }   // Spray Spot (white free, green yours, pink taken)
       else if (m.shape === 'ring') { g.lineWidth = 2; g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.stroke(); }
       else { g.beginPath(); g.arc(x, y, 1.8, 0, Math.PI * 2); g.fill(); }
     }

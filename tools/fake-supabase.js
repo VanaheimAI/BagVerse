@@ -8,7 +8,9 @@ export function createClient() {
   // account an X handle already belongs to). OAuth "redirects" navigate back to redirectTo, like the real flow.
   const xid = () => { try { return JSON.parse(sessionStorage.getItem('fake.x') || 'null'); } catch (_) { return null; } };
   const owners = () => JSON.parse(localStorage.getItem('fake.xowner') || '{}');
-  const FAKE_X = () => ({ provider: 'x', identity_data: { user_name: localStorage.getItem('fake.xhandle') || 'kobi_x', full_name: 'Kobi', avatar_url: '' } });
+  const FAKE_X = () => ({ provider: 'x', identity_data: { user_name: localStorage.getItem('fake.xhandle') || 'kobi_x', full_name: 'Kobi', avatar_url: '' }, provider_id: 'x-' + (localStorage.getItem('fake.xhandle') || 'kobi_x') });
+  const tellServer = (id, x) => { try { const r = new XMLHttpRequest(); r.open('POST', '/__fake/xuser', false); r.send(JSON.stringify({ uid: id, identity: x })); } catch (_) {} };
+  if (xid()) tellServer(uid, xid());
   const user = () => ({ id: uid, is_anonymous: !xid(), identities: xid() ? [xid()] : [], user_metadata: xid()?.identity_data || {} });
   // the real flow leaves for x.com and comes back (a full page load); a hash-only change wouldn't reload, so force it
   const go = (url) => setTimeout(() => { const u = new URL(url, location.href);
@@ -19,9 +21,9 @@ export function createClient() {
     signInAnonymously: async () => ({ data: { user: { id: uid } }, error: null }),
     linkIdentity: async ({ options }) => { const x = FAKE_X(), h = x.identity_data.user_name, o = owners()[h];
       if (o && o !== uid) { go(options.redirectTo + '?error=server_error&error_code=identity_already_exists&error_description=Identity+is+already+linked+to+another+user'); return { data: {}, error: null }; }
-      sessionStorage.setItem('fake.x', JSON.stringify(x)); localStorage.setItem('fake.xowner', JSON.stringify({ ...owners(), [h]: uid })); go(options.redirectTo + '#access_token=fake'); return { data: {}, error: null }; },
+      sessionStorage.setItem('fake.x', JSON.stringify(x)); tellServer(uid, x); localStorage.setItem('fake.xowner', JSON.stringify({ ...owners(), [h]: uid })); go(options.redirectTo + '#access_token=fake'); return { data: {}, error: null }; },
     signInWithOAuth: async ({ options }) => { const x = FAKE_X(), h = x.identity_data.user_name, o = owners()[h] || uid;
-      sessionStorage.setItem('fake.uid', o); sessionStorage.setItem('fake.x', JSON.stringify(x)); localStorage.setItem('fake.xowner', JSON.stringify({ ...owners(), [h]: o })); go(options.redirectTo + '#access_token=fake'); return { data: {}, error: null }; },
+      sessionStorage.setItem('fake.uid', o); sessionStorage.setItem('fake.x', JSON.stringify(x)); tellServer(o, x); localStorage.setItem('fake.xowner', JSON.stringify({ ...owners(), [h]: o })); go(options.redirectTo + '#access_token=fake'); return { data: {}, error: null }; },
     signOut: async () => { sessionStorage.removeItem('fake.x'); uid = 'uid-' + Math.random().toString(36).slice(2, 8); sessionStorage.setItem('fake.uid', uid); return { error: null }; },
   };
   // cloud saves: one row per user, own row only (like the real RLS)
@@ -55,7 +57,7 @@ export function createClient() {
   // server-side tables (wallets, raffles, raffle_entries) live on the test server (tools/wallet_server.mjs), like the
   // real tables the API writes
   const xhr = (method, url, body) => { const x = new XMLHttpRequest(); x.open(method, url, false); x.send(body ? JSON.stringify(body) : null); try { return JSON.parse(x.responseText); } catch (_) { return []; } };
-  const SERVER = new Set(['wallets', 'raffles', 'raffle_entries', 'linked_wallets']);
+  const SERVER = new Set(['wallets', 'raffles', 'raffle_entries', 'linked_wallets', 'tags', 'tag_log']);
   function from(name) {
     if (name === 'saves') return savesTable();
     if (SERVER.has(name)) {

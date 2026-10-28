@@ -15,6 +15,7 @@ import draw from '../api/raffle/draw.js';
 import adminApi from '../api/admin.js';
 import adsApi from '../api/ads.js';
 import evmApi from '../api/wallet/evm.js';
+import tagApi from '../api/tag.js';
 import { fakeAdmin } from './fake-admin.mjs';
 
 const [dist = '/tmp/dist-fake', port = 4175] = process.argv.slice(2);
@@ -32,13 +33,15 @@ const payChain = async (_u, { body }) => { const { method, params } = JSON.parse
       postTokenBalances: [{ accountIndex: 2, owner: TREASURY, mint: USDC_MINT, uiTokenAmount: { amount: String(p.amount * 1e6) } }, { accountIndex: 1, owner: p.payer, mint: USDC_MINT, uiTokenAmount: { amount: String(1e9 - p.amount * 1e6) } }] } }; }
   return { json: async () => ({ result }) }; };
 const payDeps = { ...deps, rpc: 'fake', fetchFn: payChain };
-const routes = { '/api/wallet/verify': verify, '/api/wallet/holdings': holdings, '/api/raffle/enter': enter, '/api/raffle/draw': draw, '/api/admin': adminApi, '/api/ads': adsApi, '/api/wallet/evm': evmApi };
+const routes = { '/api/wallet/verify': verify, '/api/wallet/holdings': holdings, '/api/raffle/enter': enter, '/api/raffle/draw': draw, '/api/admin': adminApi, '/api/ads': adsApi, '/api/wallet/evm': evmApi, '/api/tag': tagApi };
 process.env.ADMIN_SECRET ||= 'test-secret';
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png', '.glb': 'model/gltf-binary', '.mp3': 'audio/mpeg', '.woff2': 'font/woff2', '.woff': 'font/woff', '.svg': 'image/svg+xml', '.txt': 'text/plain', '.wasm': 'application/wasm', '.ico': 'image/x-icon' };
 const body = (req) => new Promise((r) => { let s = ''; req.on('data', (c) => (s += c)); req.on('end', () => { try { r(JSON.parse(s || '{}')); } catch (_) { r({}); } }); });
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
   if (routes[u.pathname]) { req.body = req.method === 'POST' ? await body(req) : {}; return routes[u.pathname](req, res, /\/api\/(ads|admin)$/.test(u.pathname) ? payDeps : deps); }
+  if (u.pathname === '/__fake/xuser') { const b = await body(req); (sb.db.__xusers ||= {})[b.uid] = b.identity; return res.end('{}'); }   // which X identity an account has (the auth server's job)
+  if (u.pathname === '/__fake/now') { const b = await body(req); deps.now = b.now || undefined; return res.end('{}'); }   // tests: move the server clock
   if (u.pathname === '/__fake/pay') { const b = await body(req); pays.set(b.reference, b); return res.end('{}'); }
   if (u.pathname === '/__fake/env') { Object.assign(process.env, await body(req)); return res.end('{}'); }   // tests: e.g. ADMIN_WALLET = the fake wallet's address
   const t = /^\/__fake\/t\/(\w+)(\/delete)?$/.exec(u.pathname);

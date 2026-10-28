@@ -822,3 +822,28 @@ body.touch #skins .sl-lbl { justify-content: space-between; }
   #login .lg-tag { text-align: center; }
 }
 @media (max-aspect-ratio: 3/2) and (max-height: 560px) { #login .lg-logo { height: 44px; margin-bottom: 4px; } #login .lg-note { display: none; } }
+
+/* ---- Spray Spots (src/tags.js) */
+#modal .card:has(.tg-card), #modal .card:has(#tg-prev) { width: min(640px, 94vw); max-height: 92vh; overflow-y: auto; }
+#tg-prev { width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; display: block; background: linear-gradient(160deg, #3a3550, #24203a) center / 100% 100%,
+  repeating-linear-gradient(0deg, transparent 0 34px, rgba(255,255,255,.05) 34px 37px); }
+.tg-pick { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; margin: 12px 0 8px; }
+.tg-fonts { display: flex; gap: 6px; flex-wrap: wrap; }
+#mbody .tg-fonts button { font-size: 17px; letter-spacing: 0; padding: 7px 12px; text-transform: none; }
+.tg-cols { display: flex; gap: 6px; align-items: center; }
+#mbody .tg-cols button { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); }
+#mbody .tg-cols button.on { border-color: #fff; box-shadow: 0 0 0 2px #7cff3d; }
+.tg-consent { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.3; opacity: .9; margin: 8px 0; cursor: pointer; }
+.tg-consent input { margin-top: 3px; width: 18px; height: 18px; accent-color: #7cff3d; flex: none; }
+.tg-err { color: #ff8a7a; font-weight: 600; margin: 6px 0; }
+.tg-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+#mbody .tg-btns button:disabled { opacity: .45; cursor: default; }
+.tg-note { font-size: 14px; opacity: .72; margin: 10px 0 0; }
+.tg-note a { color: #7cff3d; }
+.tg-holder { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(255,61,210,.1); border: 1px solid rgba(255,61,210,.35); }
+.tg-holder img { width: 44px; height: 44px; border-radius: 50%; flex: none; }
+.tg-holder small, .tg-in small { display: block; opacity: .7; font-size: 13px; }
+.tg-card { width: 100%; border-radius: 12px; display: block; box-shadow: 0 6px 30px rgba(0,0,0,.5); }
+.tg-in { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.08); }
+.tg-in span { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+#mbody .tg-in button { font-size: 14px; padding: 8px 12px; }

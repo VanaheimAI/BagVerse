@@ -205,6 +205,24 @@ Idle→Idle and Gangnam_Style→Dance are wired in too. Add `Falling_Idle.fbx` o
 
 Alternative for any new character: upload the mesh (no rig) to mixamo.com's auto-rigger, download the FBX, and run `build_character.py` on it.
 
+## Spray Spots (tag walls with your X handle)
+Walls around the city that signed-in players (Sign in with X, level 5+) tag with their handle and profile picture.
+- **Rules** (`src/tagspots.js` `TAG_RULES`, enforced by `api/tag.js`): a tag fades 72 h after it was sprayed or
+  touched up; the owner can touch up once a day (in person); a fresh tag is locked for 10 min; one spray per player
+  every 5 min; at most 3 walls held; 3 reports from different players hide a tag. The handle and avatar come from the
+  auth server's X identity, never from the game, so nobody can spray someone else's name. Level comes from the cloud save.
+- **Share card**: after each spray the game photographs the wall (you standing next to it) and adds your handle,
+  the district and the site link. Players share it themselves: the phone share sheet, or "Post on X" (copies the
+  picture and opens X with the text ready), or Save image. No X API, and no reward for posting (X's rules forbid it).
+  The link (`/?spot=<id>`) drops visitors in front of that wall.
+- **Pull-back**: when someone sprays over your tag, the next visit shows "You got sprayed over" with Go take it back /
+  Call it out on X.
+- **Setup**: run the "Spray Spots" block of `supabase/schema.sql` (tables `tags`, `tag_log`, `tag_reports`).
+  Moderation: /admin → TAGS (hide, restore, clear a wall).
+- **Spots**: `tools/find_tag_spots.mjs` finds flat walls (away from doors, portals, kiosks and rentable screens);
+  paste its output into `TAG_SPOTS`. Never renumber an id. Tests: `tools/tag_api_test.mjs` (rules) and
+  `tools/tags_test.mjs` (two players in the browser).
+
 ## Code map
 
 ```

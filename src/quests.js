@@ -38,6 +38,7 @@ export const DAILY_POOL = [
   D('d_jump', 'Jump 25 times', 'jump', 25),
   D('d_skin', 'Change your skin', 'skin', 1),
   D('d_bagrun', 'Play 2 Bag Runs', 'bagrun', 2, { gate: 'portals' }),
+  D('d_tag', 'Spray your tag on a wall', 'tag', 1, { gate: 'tagging' }),
   D('d_bagrun300', 'Score 800+ in a Bag Run', 'bagrun_300', 1, { gate: 'portals' }),
 ];
 export const WEEKLY_POOL = [
@@ -54,6 +55,7 @@ export const WEEKLY_POOL = [
   D('w_kiosk', 'Check the Kanto Vault raffles 3 times', 'rwa_view', 3),   // (was: 4 different kiosks)
   D('w_walk', 'Walk 3 km', 'walk', 3000, { unit: 'm' }),
   D('w_bagrun', 'Play 10 Bag Runs', 'bagrun', 10, { gate: 'portals' }),
+  D('w_tag', 'Spray 5 tags', 'tag', 5, { gate: 'tagging' }),
   D('w_bagrun600', 'Score 2,000+ in a Bag Run', 'bagrun_600', 1, { gate: 'portals' }),
 ];
 export const DAILY_XP = 150, DAILY_BONUS = 150, WEEKLY_XP = 300, WEEKLY_BONUS = 1000, WEEKLY_BONUS_AT = 5;
@@ -71,6 +73,7 @@ export const ACHIEVEMENTS = [
   A('a_play60', 'One Hour In', 'playMin', 60, 300), A('a_play600', 'Ten Hours In', 'playMin', 600, 1500), A('a_play6000', 'Resident (100 h)', 'playMin', 6000, 5000),
   A('a_streak7', '7-day streak', 'bestStreak', 7, 500), A('a_streak30', '30-day streak', 'bestStreak', 30, 2500), A('a_streak100', '100-day streak', 'bestStreak', 100, 5000),
   A('a_ads10', 'Ad Enjoyer (10 billboards)', 'billboard', 10, 300), A('a_ads50', 'Billboard Critic (50)', 'billboard', 50, 1200),
+  A('a_tag1', 'Writer (spray your first tag)', 'tag', 1, 200), A('a_tag25', 'All City (25 tags)', 'tag', 25, 1500), A('a_takeover10', 'Buff Patrol (spray over 10 tags)', 'tag_over', 10, 1000),
   A('a_zones', 'Tourist (visit every district)', 'zonesSeen', 11, 800),
   A('a_skins5', 'Wardrobe (try 5 skins)', 'skinsTried', 5, 500), A('a_chat100', 'Chatterbox (100 messages)', 'chat', 100, 600),
   A('a_rwa1', 'In the Running (enter an RWA tournament)', 'rwaEntries', 1, 500), A('a_rwa10', 'Tournament Regular (10 entries)', 'rwaEntries', 10, 2000),

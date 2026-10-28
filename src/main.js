@@ -43,6 +43,7 @@ import QRCode from 'qrcode';
 import { TREASURY, AD_DAYS, adPrice } from './treasury.js';
 import { session } from './net.js';
 import { LoginScreen } from './login.js';
+import { Tags } from './tags.js';
 import { accountsOn, xAccount, signInWithX, finishXReturn, signOutX, syncCloud, pushCloud } from './account.js';
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
@@ -847,7 +848,7 @@ function mapMarks() {
   const m = collect.kiosks.map((k) => ({ x: k.pos.x, z: k.pos.z, color: '#ffc83d', shape: 'diamond' }));
   for (const b of collect.bags) if (!b.found && Math.abs(b.pos.x - P.x) < 40 && Math.abs(b.pos.z - P.z) < 40) m.push({ x: b.pos.x, z: b.pos.z, color: '#5dff7a' });
   if (beaconTarget) m.push({ x: beaconTarget.x, z: beaconTarget.z, color: '#7cff3d', shape: 'ring' });
-  return m.concat(mp.marks());
+  return m.concat(tags?.marks() || [], mp.marks());
 }
 
 // ---------------------------------------------------------------- billboard rentals (Solana Pay, USDC to the treasury)
@@ -1112,6 +1113,9 @@ function interactions(dt) {
   // RWA prize entry kiosks: free, level-gated tournament entries
   const kiosk = !promptHtml && collect.kioskNear(p);
   if (kiosk) { promptHtml = `<kbd>E</kbd> RWA ENTRY · ${kiosk.event.toUpperCase()}`; action = () => openKiosk(kiosk); }
+  // Spray Spots: tag the wall you're standing at
+  const tagSpot = !promptHtml && tags?.near(p);
+  if (tagSpot) { promptHtml = tags.promptFor(tagSpot); action = () => tags.open(tagSpot); }
   // billboards: rent prompt when close, and watch-to-earn when looking at one
   let bestBB = null, bestD = 1e9;
   const look = new THREE.Vector3(); camera.getWorldDirection(look);
@@ -1179,6 +1183,7 @@ const start = () => {
   missionsUI.updateTracker();
   const login = () => { if (progress.loginPending && quests.tutorialDone) missionsUI.open('daily'); };
   if (!progress.s.tut.seenWelcome && !params.has('autostart')) missionsUI.welcome(login); else login();
+  if (params.get('spot')) setTimeout(() => tags?.arrive(params.get('spot')), 600);   // share-card links: arrive at that wall
 };
 // skin selection: shown once loading is done, and in game with K / the Skins button
 const skins = new SkinScreen({
@@ -1310,6 +1315,7 @@ let account = null;
 const cleanName = (h) => String(h || '').replace(/[^\w.-]/g, '').slice(0, 16);
 async function refreshAccount() {
   account = await xAccount();
+  if (progress.s.xLinked !== !!account?.linked) { progress.s.xLinked = !!account?.linked; progress.save(); }
   if (xBtn) { xBtn.hidden = !loginScreen; xBtn.textContent = account?.linked ? '𝕏 @' + (account.handle || 'SIGNED IN') : '𝕏 SIGN IN'; xBtn.classList.toggle('on', !!account?.linked); }
   // first visit after signing in: the X handle becomes the player name (changeable on the skin screen)
   if (account?.linked && account.handle && !progress.s.nameSet) { progress.s.name = cleanName(account.handle); progress.s.nameSet = true; progress.save(); player.refreshPlate(profile()); lb.saveProfile(); }
@@ -1322,6 +1328,21 @@ const showLogin = async (inGame = false) => {
   return loginScreen.show({ account, message: msg, inGame, onX: () => signInWithX(), onSignOut: async () => { await pushCloud(true); await signOutX(); location.reload(); } });
 };
 xBtn?.addEventListener('click', () => { if (!skins.isOpen && !inGame()) showLogin(true); });
+// ---- Spray Spots: tag walls with your X handle (website); the share card photographs the wall with this
+function captureShot(from, at) {
+  const pp = camera.position.clone(), pq = camera.quaternion.clone(), fov = camera.fov, asp = camera.aspect;
+  try {
+    camera.position.copy(from); camera.fov = 40; camera.aspect = 1200 / 628; camera.updateProjectionMatrix(); camera.lookAt(at); camera.updateMatrixWorld();
+    composer.render(0);
+    const c = document.createElement('canvas'); c.width = 1200; c.height = 628;
+    c.getContext('2d').drawImage(renderer.domElement, 0, 0, 1200, 628);   // same task as the render, so the frame is still there
+    return c;
+  } finally { camera.position.copy(pp); camera.quaternion.copy(pq); camera.fov = fov; camera.aspect = asp; camera.updateProjectionMatrix(); camera.updateMatrixWorld(); }
+}
+const tags = new Tags({ scene, world, progress, hud, sfx, quests, player, cam, enabled: accountsOn(),
+  account: () => account, signIn: () => showLogin(true), capture: captureShot,
+  travel: (z) => hud.onTravel?.(z), beforeSpray: () => pushCloud(true) });
+refreshAccount();
 if (loginScreen) {   // keep the cloud copy fresh for signed-in players
   setInterval(() => pushCloud(), 60e3);
   document.addEventListener('visibilitychange', () => { if (document.hidden) pushCloud(true); });
@@ -1330,7 +1351,7 @@ if (loginScreen) {   // keep the cloud copy fresh for signed-in players
 if (params.has('autostart')) start();
 else if (loginScreen) { $('loader').hidden = true; showLogin().then(openSkins); }
 else openSkins();
-window.__bagverse = { GFX, exportMap: () => import('./mapexport.js').then((m) => m.exportMap({ scene, trees })), openAdSlot, liveAds, fx, openCollection, raffles, openVault, tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
+window.__bagverse = { GFX, tags, captureShot, exportMap: () => import('./mapexport.js').then((m) => m.exportMap({ scene, trees })), openAdSlot, liveAds, fx, openCollection, raffles, openVault, tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
 
 // slow-frame guard: after a short warm-up, a few seconds under ~22 fps sheds the heaviest effects live
 // and remembers the lower tier for next time
@@ -1403,6 +1424,7 @@ function frame() {
   cam.update(dt, input, veh ? veh.pos : player.root.position);
   crowd.update(dt, t, camera.position);
   world.update(t, dt);
+  tags?.update();
 
   if (window.__camOverride) { const o = window.__camOverride; camera.position.set(...o.pos); camera.lookAt(...o.at); }   // test/screenshot hook
   look.update(t, player.root.position);
