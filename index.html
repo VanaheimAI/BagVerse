@@ -9,10 +9,12 @@
   // "Sign in with X" always returns to bagverse.fun), bringing this browser's progress with them (browser storage
   // belongs to one address, so it travels in the link once and is imported on arrival).
   (function () {
-    var CANON = 'bagverse.fun', OLD = ['bag-verse-ten.vercel.app', 'www.bagverse.fun'];
+    var CANON = 'bagverse.fun', OLD = ['bag-verse-ten.vercel.app'];   // (not www: Vercel may serve bagverse.fun from www, and moving www back would loop)
     var mine = function (k) { return k && (k.indexOf('bagverse.') === 0 || k.indexOf('bv_') === 0); };
     try {
-      if (OLD.indexOf(location.host) >= 0 && !/access_token|error_code/.test(location.hash)) {
+      var hops = +(sessionStorage.getItem('bv_hops') || 0);
+      if (OLD.indexOf(location.host) >= 0 && hops < 2 && !/access_token|error_code/.test(location.hash)) {
+        sessionStorage.setItem('bv_hops', hops + 1);   // never bounce more than twice
         var data = {};
         for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (mine(k)) data[k] = localStorage.getItem(k); }
         var pack = Object.keys(data).length ? '#bvmove=' + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(data))))) : '';
