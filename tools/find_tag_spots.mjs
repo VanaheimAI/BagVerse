@@ -58,8 +58,16 @@ const spots = await p.evaluate(() => {
     cands.sort((a, b) => a.d - b.d);
     const pick = [];
     const want = 3;
+    // the collider can have invisible walls: the tag's centre and corners must land on visible geometry too
+    const real = (c) => { const tan = new V(-c.n.z, 0, c.n.x);
+      for (const [u, v] of [[0, 0], [-1.8, -0.9], [1.8, -0.9], [-1.8, 0.9], [1.8, 0.9]]) {
+        const o = c.p.clone().addScaledVector(c.n, 1.5).addScaledVector(tan, u); o.y += v;
+        const h = ph.visibleHit(B.scene, o, c.n.clone().negate(), 3, B.camera); if (!h || Math.abs(h.distance - 1.5) > 0.3) return false;
+      } return true; };
     for (const c of cands) {
       if (pick.length >= want) break;
+      if (pick.some((q) => q.p.distanceTo(c.p) < 16) || res.some((q) => Math.hypot(q.x - c.p.x, q.z - c.p.z) < 16)) continue;
+      if (!real(c)) continue;
       if (pick.some((q) => q.p.distanceTo(c.p) < 16) || res.some((q) => Math.hypot(q.x - c.p.x, q.z - c.p.z) < 16)) continue;
       pick.push(c);
     }

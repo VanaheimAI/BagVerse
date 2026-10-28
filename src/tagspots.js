@@ -1,25 +1,30 @@
 // Spray Spots: the walls players can tag with their X handle, and the rules (shared by the game and api/tag.js, so
 // the server enforces exactly what the game shows). Spot walls were found by tools/find_tag_spots.mjs:
-// a flat collider wall facing open, walkable ground, away from doors, portals, kiosks and rentable screens.
+// a flat collider wall (that is also visible geometry) facing open, walkable ground, away from doors, portals, kiosks
+// and rentable screens.
 // x/y/z = centre of the tag on the wall, nx/nz = the wall's outward normal. Never renumber an id: tags are stored by id.
 export const TAG_SPOTS = [
-  { id: 'bag_square_1', zone: 'bag_square', x: -2.2, y: 2.36, z: 7.58, nx: 0.905, nz: 0.425 },
-  { id: 'ad_canyon_1', zone: 'ad_canyon', x: -54, y: 1.91, z: -20.37, nx: -1, nz: 0 },
+  { id: 'ad_canyon_1', zone: 'ad_canyon', x: -54, y: 1.91, z: -19.96, nx: -1, nz: 0 },
   { id: 'arcade_1', zone: 'arcade', x: -150.14, y: 1.91, z: 21, nx: 0, nz: -1 },
-  { id: 'arcade_2', zone: 'arcade', x: -149.56, y: 1.91, z: -21.29, nx: 0, nz: 1 },
-  { id: 'gm_gate_1', zone: 'gm_gate', x: 0.3, y: 2.51, z: 149.02, nx: 0, nz: -1 },
-  { id: 'gm_gate_2', zone: 'gm_gate', x: 23.84, y: 1.91, z: 140.81, nx: -1, nz: 0 },
+  { id: 'arcade_2', zone: 'arcade', x: -166.48, y: 1.91, z: 21.3, nx: 0, nz: -1 },
+  { id: 'arcade_3', zone: 'arcade', x: -133.5, y: 1.91, z: 21.3, nx: 0, nz: -1 },
+  { id: 'gm_gate_2', zone: 'gm_gate', x: 22, y: 1.91, z: 162.1, nx: -1, nz: 0 },
+  { id: 'gm_gate_3', zone: 'gm_gate', x: 16.87, y: 1.91, z: 104.14, nx: -1, nz: 0 },
   { id: 'copium_1', zone: 'copium', x: 149.95, y: 1.91, z: 20, nx: 0, nz: -1 },
   { id: 'copium_2', zone: 'copium', x: 151.57, y: 1.91, z: -19.99, nx: 0, nz: 1 },
+  { id: 'copium_3', zone: 'copium', x: 135.24, y: 1.91, z: -19.99, nx: 0, nz: 1 },
   { id: 'hodl_heights_1', zone: 'hodl_heights', x: 15.99, y: 1.91, z: -144.47, nx: -1, nz: 0 },
   { id: 'hodl_heights_2', zone: 'hodl_heights', x: -16, y: 1.91, z: -156.54, nx: 1, nz: 0 },
-  { id: 'rekt_1', zone: 'rekt', x: 145.84, y: 1.91, z: -151.82, nx: 0.725, nz: -0.688 },
-  { id: 'rekt_2', zone: 'rekt', x: 131.73, y: 1.91, z: -163.53, nx: -0.617, nz: 0.787 },
-  { id: 'bull_run_2', zone: 'bull_run', x: 131.81, y: 1.91, z: 160.64, nx: -0.606, nz: -0.796 },
-  { id: 'doge_park_1', zone: 'doge_park', x: -137.41, y: 1.91, z: -158.85, nx: 0.622, nz: 0.783 },
-  { id: 'doge_park_2', zone: 'doge_park', x: -162.99, y: 1.91, z: -137.84, nx: 0.593, nz: -0.805 },
+  { id: 'hodl_heights_3', zone: 'hodl_heights', x: -16, y: 1.91, z: -140.02, nx: 1, nz: 0 },
+  { id: 'rekt_1', zone: 'rekt', x: 138.03, y: 1.91, z: -158.59, nx: -0.617, nz: 0.787 },
+  { id: 'rekt_2', zone: 'rekt', x: 150.02, y: 1.91, z: -147.43, nx: -0.725, nz: 0.688 },
+  { id: 'rekt_3', zone: 'rekt', x: 158.94, y: 1.91, z: -130.95, nx: -0.791, nz: 0.611 },
+  { id: 'doge_park_1', zone: 'doge_park', x: -137.07, y: 1.91, z: -159.12, nx: 0.622, nz: 0.783 },
+  { id: 'doge_park_2', zone: 'doge_park', x: -163.42, y: 1.91, z: -138.16, nx: 0.593, nz: -0.805 },
+  { id: 'doge_park_3', zone: 'doge_park', x: -154.32, y: 1.91, z: -154.68, nx: 0.702, nz: 0.713 },
   { id: 'swamp_1', zone: 'swamp', x: -124.85, y: 1.91, z: 92.99, nx: 0, nz: 1 },
   { id: 'swamp_2', zone: 'swamp', x: -148.31, y: 1.91, z: 149.4, nx: 0.692, nz: -0.722 },
+  { id: 'swamp_3', zone: 'swamp', x: -162.26, y: 1.91, z: 127.7, nx: 0.806, nz: -0.592 },
 ];
 export const spotById = (id) => TAG_SPOTS.find((s) => s.id === id) || null;
 

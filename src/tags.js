@@ -34,8 +34,9 @@ const loadFonts = () => (fontsReady ||= Promise.all(TAG_FONTS.map((f) => documen
 export function paintTag(g, tag, { avatarImg = null, district = '' } = {}) {
   g.clearRect(0, 0, W, H);
   if (!tag) {   // empty wall: a stencilled frame inviting a tag
-    g.save(); g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 8; g.setLineDash([34, 22]); g.beginPath(); g.roundRect(40, 40, W - 80, H - 80, 40); g.stroke(); g.restore();
-    g.fillStyle = 'rgba(255,255,255,.7)'; g.textAlign = 'center'; g.font = '400 92px "Permanent Marker", cursive'; g.fillText('TAG THIS WALL', W / 2, H / 2 + 10);
+    g.fillStyle = 'rgba(12,8,24,.35)'; g.beginPath(); g.roundRect(40, 40, W - 80, H - 80, 40); g.fill();
+    g.save(); g.strokeStyle = '#7cff3d'; g.lineWidth = 10; g.setLineDash([34, 22]); g.beginPath(); g.roundRect(40, 40, W - 80, H - 80, 40); g.stroke(); g.restore();
+    g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.font = '400 92px "Permanent Marker", cursive'; g.fillText('🎨 TAG THIS WALL', W / 2, H / 2 + 10);
     g.font = '700 40px Rajdhani, sans-serif'; g.fillStyle = 'rgba(124,255,61,.85)'; g.fillText(`SPRAY SPOT · ${district.toUpperCase()}`, W / 2, H / 2 + 80);
     return;
   }
@@ -122,7 +123,7 @@ export class Tags {
       paintTag(w.ctx, tag, { avatarImg: img, district: this.zoneLabel(s.zone) });
       w.tex.needsUpdate = true;
     }
-    w.mesh.material.opacity = tag ? 0.35 + 0.65 * Math.min(1, st.fade * 1.5) : 0.55;   // full strength for the first day, then fading
+    w.mesh.material.opacity = tag ? 0.35 + 0.65 * Math.min(1, st.fade * 1.5) : 0.9;   // full strength for the first day, then fading
   }
 
   // ---------------------------------------------------------------- data
@@ -313,7 +314,11 @@ export class Tags {
 
   async makeCard(s, tag, overwrote, touched) {
     const tan = new THREE.Vector3(-s.nz, 0, s.nx);
-    const from = new THREE.Vector3(s.x + s.nx * 5.6 - tan.x * 0.9, s.y + 0.05, s.z + s.nz * 5.6 - tan.z * 0.9);
+    // step back from the wall as far as the street allows (up to 5.6 m) so the photo isn't taken from inside a building
+    const out = new THREE.Vector3(s.nx, 0, s.nz).addScaledVector(tan, -0.16).normalize();
+    const room = this.world.physics.raycast(new THREE.Vector3(s.x + s.nx * 0.2, s.y + 0.05, s.z + s.nz * 0.2), out, 6);
+    const back = Math.max(2.5, Math.min(5.6, room - 0.5));
+    const from = new THREE.Vector3(s.x + out.x * back, s.y + 0.05, s.z + out.z * back);
     const at = new THREE.Vector3(s.x + tan.x * 0.55, s.y - 0.1, s.z + tan.z * 0.55);
     const cw = 1200, chh = 628, c = document.createElement('canvas'); c.width = cw; c.height = chh; const g = c.getContext('2d');
     let shot = null; try { shot = this.capture(from, at); } catch (_) { shot = null; }
