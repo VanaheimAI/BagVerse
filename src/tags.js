@@ -12,6 +12,9 @@ import '@fontsource/rubik-wet-paint/latin-400.css';
 import { TAG_SPOTS, TAG_RULES as R, TAG_FONTS, TAG_COLORS, cleanStyle, tagState, spotById } from './tagspots.js';
 import { tables, session } from './net.js';
 
+// the public address printed on share cards and used in shared links (not whatever preview URL the player is on)
+const SITE = (import.meta.env.VITE_SITE_URL || 'https://bagverse.fun').replace(/\/$/, '');
+const SITE_HOST = SITE.replace(/^https?:\/\//, '');
 const W = 1024, H = 576, PW = 4.0, PH = 2.25;   // texture px, wall plane metres
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const ls = { get: (k, d = null) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} } };
@@ -310,7 +313,7 @@ export class Tags {
   }
 
   // ---------------------------------------------------------------- the share card (no X API: the player posts it)
-  shareUrl(spot) { return `${location.origin}/?spot=${encodeURIComponent(spot)}&utm_source=x&utm_medium=share&utm_campaign=spray`; }
+  shareUrl(spot) { return `${SITE}/?spot=${encodeURIComponent(spot)}&utm_source=x&utm_medium=share&utm_campaign=spray`; }
 
   async makeCard(s, tag, overwrote, touched) {
     const tan = new THREE.Vector3(-s.nz, 0, s.nx);
@@ -342,7 +345,7 @@ export class Tags {
     g.font = '700 28px Rajdhani, sans-serif'; g.fillStyle = '#7cff3d';
     g.fillText((touched ? 'STILL HOLDING ' : overwrote ? `TOOK THIS WALL FROM @${overwrote} · ` : 'TAGGED ') + this.zoneLabel(s.zone).toUpperCase(), 168, chh - 50);
     g.textAlign = 'right'; g.fillStyle = 'rgba(255,255,255,.9)'; g.font = '700 26px Rajdhani, sans-serif'; g.fillText(touched || overwrote ? 'YOUR MOVE →' : 'COME TAKE IT →', cw - 36, chh - 92);
-    g.fillStyle = '#fff'; g.font = '700 30px Rajdhani, sans-serif'; g.fillText(location.host, cw - 36, chh - 50);
+    g.fillStyle = '#fff'; g.font = '700 30px Rajdhani, sans-serif'; g.fillText(SITE_HOST, cw - 36, chh - 50);
     return c;
   }
 
