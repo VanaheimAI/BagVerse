@@ -39,6 +39,7 @@ export const DAILY_POOL = [
   D('d_skin', 'Change your skin', 'skin', 1),
   D('d_bagrun', 'Play 2 Bag Runs', 'bagrun', 2, { gate: 'portals' }),
   D('d_tag', 'Spray your tag on a wall', 'tag', 1, { gate: 'tagging' }),
+  D('d_halloween', 'Play Grave Drop or Pumpkin Rush (Halloween Arena)', 'halloween', 1),
   D('d_bagrun300', 'Score 800+ in a Bag Run', 'bagrun_300', 1, { gate: 'portals' }),
 ];
 export const WEEKLY_POOL = [
@@ -73,6 +74,7 @@ export const ACHIEVEMENTS = [
   A('a_play60', 'One Hour In', 'playMin', 60, 300), A('a_play600', 'Ten Hours In', 'playMin', 600, 1500), A('a_play6000', 'Resident (100 h)', 'playMin', 6000, 5000),
   A('a_streak7', '7-day streak', 'bestStreak', 7, 500), A('a_streak30', '30-day streak', 'bestStreak', 30, 2500), A('a_streak100', '100-day streak', 'bestStreak', 100, 5000),
   A('a_ads10', 'Ad Enjoyer (10 billboards)', 'billboard', 10, 300), A('a_ads50', 'Billboard Critic (50)', 'billboard', 50, 1200),
+  A('a_pumpkin100', 'Pumpkin King (100 pumpkins)', 'pumpkin', 100, 800), A('a_grave1', 'Grave Robber (win Grave Drop)', 'grave_win', 1, 600),
   A('a_tag1', 'Writer (spray your first tag)', 'tag', 1, 200), A('a_tag25', 'All City (25 tags)', 'tag', 25, 1500), A('a_takeover10', 'Buff Patrol (spray over 10 tags)', 'tag_over', 10, 1000),
   A('a_zones', 'Tourist (visit every district)', 'zonesSeen', 11, 800),
   A('a_skins5', 'Wardrobe (try 5 skins)', 'skinsTried', 5, 500), A('a_chat100', 'Chatterbox (100 messages)', 'chat', 100, 600),

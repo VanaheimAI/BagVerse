@@ -390,6 +390,8 @@ export class RunUI {
     el.hidden = false; el.replaceChildren(...rows.slice(0, 5).map((r, i) => { const d = document.createElement('div'); d.className = r.me ? 'me' : ''; d.textContent = `${i + 1}. ${r.name}${r.done ? ' ✓' : ''}`; const b = document.createElement('b'); b.textContent = r.score.toLocaleString(); d.append(b); return d; }));
   }
   route(t) { const c = this.el.querySelector('#rh-route'); c.textContent = 'ROUTE · ' + t; c.classList.remove('go'); void c.offsetWidth; c.classList.add('go'); }
+  /** lightning: a white flash over the screen (Grave Drop) */
+  flash() { let f = document.getElementById('rh-flash'); if (!f) { f = document.createElement('div'); f.id = 'rh-flash'; document.body.appendChild(f); } f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
   pop(t) { const c = this.el.querySelector('#rh-pop'); c.textContent = t; c.classList.remove('go'); void c.offsetWidth; c.classList.add('go'); }
   /** relabel the three small fields (Tile Drop uses ALIVE / FLOOR / SCORE); null restores Bag Run's */
   labels(ls) { const L = ls || ['SCORE', 'COMBO', 'BAGS']; this.el.querySelectorAll('.rh-bar span small').forEach((e, i) => (e.textContent = L[i])); }

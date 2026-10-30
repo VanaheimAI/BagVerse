@@ -847,3 +847,8 @@ body.touch #skins .sl-lbl { justify-content: space-between; }
 .tg-in { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.08); }
 .tg-in span { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 #mbody .tg-in button { font-size: 14px; padding: 8px 12px; }
+
+/* ---- Halloween Arena: lightning flash (Grave Drop) */
+#rh-flash { position: fixed; inset: 0; pointer-events: none; z-index: 30; background: #e8ecff; opacity: 0; }
+#rh-flash.go { animation: rhflash .55s ease-out; }
+@keyframes rhflash { 0% { opacity: .75; } 12% { opacity: .1; } 22% { opacity: .55; } 100% { opacity: 0; } }
