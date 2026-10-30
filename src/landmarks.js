@@ -43,7 +43,15 @@ export const VAULTS = {
     cuts: [
       { type: 'ring', c: [KANTO_C.x, KANTO_C.y], r0: 15.4, r1: 30.8, y1: 12, floorY: 0.35 },              // stands + glow ring
       { type: 'box', c: [KANTO_GATE.x, KANTO_GATE.y], n: [KANTO_N.x, KANTO_N.y], halfW: 14.5, halfD: 2.4, y1: 17, floorY: 0.35 },   // old arena gate
+      // the three city-kit towers standing in the old arena ring: gone, so the ring is open ground (Halloween Arena
+      // graveyard, Pumpkin Rush); boxes = each asset's footprint (kit.glb bbox x scale, rotated by rz) + 1 m
+      { type: 'box', c: [155.8, 162.1], n: [-0.7210, 0.6929], halfW: 11.2, halfD: 14.6, y1: 90, floorY: 0.35 },   // Eco_Building_Grid (its collider box: 26.7 x 20 m)
+      { type: 'box', c: [175.7, 139.7], n: [0.7827, 0.6224], halfW: 12.2, halfD: 10.2, y1: 90, floorY: 0.35 },   // Eco_Building_Grid
+      { type: 'box', c: [131.6, 172.9], n: [-0.6058, -0.7956], halfW: 12.5, halfD: 11.4, y1: 90, floorY: 0.35 },   // Regular_Building_TwistedTower_Large
+      { type: 'box', c: [125, 185], n: [0, 1], halfW: 9.2, halfD: 9.2, y1: 90, floorY: 0.35 },          // the tower block on the yard's west edge (collider)
+      { type: 'box', c: [116, 192.2], n: [0, 1], halfW: 14.5, halfD: 14.5, y1: 90, floorY: 0.35 },      // ...and its kit tower
     ],
+    clearKit: [[155.8, 162.1], [175.7, 139.7], [131.6, 172.9], [116, 192.2]],      // ...and their instanced visuals
     holos: { dist: 9.7, spread: 6, y: 0.7 },                         // just past the base slab
     packs: true,                                                     // showcases: floating booster-pack models (no pedestals), one per raffle
   },

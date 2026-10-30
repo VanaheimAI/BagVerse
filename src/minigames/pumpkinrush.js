@@ -9,7 +9,7 @@ import { makeCharacter } from '../player.js';
 import { weekKey, dayKey } from '../progression.js';
 import { seeded } from './bagrun.js';
 
-export const PUMPKIN_SITE = { x: 145, z: 155, r: 26 };
+export const PUMPKIN_SITE = { x: 145, z: 155, r: 31 };   // the whole graveyard (the towers in the ring were cut out)
 const DURATION = 180, LIVE = 34, RESPAWN = [2.5, 5], FREEZE = 2, REACH = 1.35;
 const KINDS = { orange: { w: 0.72, pts: 1 }, gold: { w: 0.1, pts: 5 }, rotten: { w: 0.18, pts: 0 } };
 const BOT_NAMES = ['PumpkinPete', 'GhoulGwen', 'CandyCorn', 'BatBoy', 'WitchWendy', 'SpookySam', 'MummyMo', 'CreepCarl'];
