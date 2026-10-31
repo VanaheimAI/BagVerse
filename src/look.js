@@ -132,12 +132,14 @@ function projectSH(renderer, rt, sh) {
   return sh;
 }
 
+const _snapM = new THREE.Matrix4(), _snapInv = new THREE.Matrix4(), _snapV = new THREE.Vector3(), _zero = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+
 export class Look {
   constructor(renderer, scene, camera, { low = false, ao = true, csm = true, gi = true, smaa = false } = {}) {
     this.renderer = renderer; this.scene = scene; this.camera = camera; this.low = low; this.smaa = smaa;
     renderer.toneMapping = THREE.NoToneMapping;   // tone mapping happens in the post stack (ToneMappingEffect, Neutral)
     renderer.shadowMap.enabled = true;   // every tier gets sun shadows (LOW: one 1024 map)
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = low ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;   // LOW: plain PCF (fewer taps per pixel on phones)
 
     const pmrem = new THREE.PMREMGenerator(renderer);
     this.pmrem = pmrem;
@@ -365,9 +367,15 @@ export class Look {
     this.skyMat.uniforms.uTime.value = t;
     if (this.csm) this.csm.update();
     this.sky.position.copy(this.camera.position);
-    // shadow frustum + lights follow the player
-    this.sun.target.position.copy(focus);
-    this.sun.position.copy(focus).addScaledVector(this.sunDir, 160);
+    // shadow frustum + lights follow the player, snapped to whole shadow-map texels: a frustum that slides by
+    // fractions of a texel makes every shadow edge crawl and flicker as you walk
+    const sc = this.sun.shadow.camera, texel = (sc.right - sc.left) / this.sun.shadow.mapSize.x;
+    _snapM.lookAt(_zero, this.sunDir, _up);  // light-space basis (columns: right, up, toward the sun)
+    _snapV.copy(focus).applyMatrix4(_snapInv.copy(_snapM).invert());
+    _snapV.x = Math.round(_snapV.x / texel) * texel; _snapV.y = Math.round(_snapV.y / texel) * texel;
+    _snapV.applyMatrix4(_snapM);
+    this.sun.target.position.copy(_snapV);
+    this.sun.position.copy(_snapV).addScaledVector(this.sunDir, 160);
     this.rim.target.position.copy(focus);
     this.rim.position.copy(focus).add(new THREE.Vector3(-this.sunDir.x * 50, 30, -this.sunDir.z * 50));
   }

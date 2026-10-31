@@ -83,6 +83,8 @@ function gradeNode(colorIn, g) {
   })();
 }
 
+const _snapM = new THREE.Matrix4(), _snapInv = new THREE.Matrix4(), _snapV = new THREE.Vector3(), _zero = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+
 export class Look {
   constructor(renderer, scene, camera, { low = false, ao: aoOn = true, gi = true } = {}) {
     this.renderer = renderer; this.scene = scene; this.camera = camera; this.low = low;
@@ -202,8 +204,12 @@ export class Look {
   captureGI() {}               // see header
   update(t, focus) {
     this.sky.position.copy(this.camera.position);
-    this.sun.target.position.copy(focus);
-    this.sun.position.copy(focus).addScaledVector(this.sunDir, 160);
+    // snapped to whole shadow texels (no crawling shadow edges while walking); same as look.js
+    const sc = this.sun.shadow.camera, texel = (sc.right - sc.left) / this.sun.shadow.mapSize.x;
+    _snapM.lookAt(_zero, this.sunDir, _up); _snapV.copy(focus).applyMatrix4(_snapInv.copy(_snapM).invert());
+    _snapV.x = Math.round(_snapV.x / texel) * texel; _snapV.y = Math.round(_snapV.y / texel) * texel; _snapV.applyMatrix4(_snapM);
+    this.sun.target.position.copy(_snapV);
+    this.sun.position.copy(_snapV).addScaledVector(this.sunDir, 160);
     this.rim.target.position.copy(focus);
     this.rim.position.copy(focus).add(new THREE.Vector3(-this.sunDir.x * 50, 30, -this.sunDir.z * 50));
   }

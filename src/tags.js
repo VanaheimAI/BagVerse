@@ -101,8 +101,10 @@ export class Tags {
   zoneName(id) { return this.zoneLabel(id).toLowerCase().replace(/(^|[\s/&-])([a-z])/g, (m, p, c) => p + c.toUpperCase()).replace(/\bGm\b/, 'GM').replace(/\bHodl\b/, 'HODL'); }   // for posts: "Pepe's Swamp"
 
   addWall(s) {
-    const c = document.createElement('canvas'); c.width = W; c.height = H;
-    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    // phones (LOW): half-resolution walls; the context is scaled, so everything still draws in W x H units
+    const k = this.small ? 0.5 : 1, c = document.createElement('canvas'); c.width = W * k; c.height = H * k;
+    const ctx = c.getContext('2d'); ctx.scale(k, k);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = this.small ? 4 : 8;
     const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.08, transparent: true, roughness: 0.85, metalness: 0,
       depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), mat);
@@ -110,7 +112,7 @@ export class Tags {
     mesh.lookAt(s.x + s.nx * 5, s.y, s.z + s.nz * 5);
     mesh.renderOrder = 2; mesh.name = 'TAG_' + s.id;
     this.root.add(mesh);
-    this.walls.set(s.id, { mesh, tex, ctx: c.getContext('2d'), key: '' });
+    this.walls.set(s.id, { mesh, tex, ctx, key: '' });
     this.paint(s.id);
   }
 
@@ -261,7 +263,7 @@ export class Tags {
     const temp = { spot: s.id, owner: this.uid, handle: a.handle, avatar: a.avatar, style, sprayed_at: new Date().toISOString(), touched_at: new Date().toISOString() };
     const full = document.createElement('canvas'); full.width = W; full.height = H;
     paintTag(full.getContext('2d'), temp, { avatarImg: await loadAvatar(a.avatar), district: this.zoneLabel(s.zone) });
-    const before = document.createElement('canvas'); before.width = W; before.height = H; before.getContext('2d').drawImage(w.ctx.canvas, 0, 0);
+    const before = document.createElement('canvas'); before.width = W; before.height = H; before.getContext('2d').drawImage(w.ctx.canvas, 0, 0, W, H);
     const mist = this.mist(s, TAG_COLORS[style.c]);
     const t0 = performance.now(), DUR = 1700;
     await new Promise((done) => {

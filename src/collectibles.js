@@ -115,6 +115,7 @@ export class Collectibles {
     const bag = bagAsset('green');
     this.mesh = new THREE.InstancedMesh(bag.geometry, bag.material, this.bags.length);
     this.mesh.frustumCulled = false;
+    this.draw = 90;   // metres (main.js sets less on phones)
     scene.add(this.mesh);
     // soft glow under each bag
     const gp = new Float32Array(this.bags.length * 3);
@@ -166,15 +167,20 @@ export class Collectibles {
   }
 
   update(t, camPos) {
-    const m = this._m, q = this._q, s = this._s, gp = this.glowGeo.attributes.position;
+    // only bags within DRAW m are drawn (220 bags x 1.6k tris across the map was a third of a phone's frame); the
+    // glow sprites still mark the far ones. Instances are packed, so index != bag here.
+    const m = this._m, q = this._q, s = this._s, gp = this.glowGeo.attributes.position, D2 = this.draw * this.draw;
+    let n = 0;
     this.bags.forEach((b, i) => {
-      if (b.found) { s.set(0, 0, 0); m.compose(b.pos, q.identity(), s); this.mesh.setMatrixAt(i, m); gp.setXYZ(i, 0, -999, 0); return; }
-      const far = camPos.distanceToSquared(b.pos) > 90 * 90;
+      if (b.found) { gp.setXYZ(i, 0, -999, 0); return; }
+      gp.setXYZ(i, b.pos.x, b.pos.y + 0.55, b.pos.z);
+      const d2 = camPos.distanceToSquared(b.pos); if (d2 > D2) return;
+      const far = d2 > 50 * 50;
       const y = b.pos.y + 0.35 + (far ? 0 : Math.sin(t * 2 + b.phase) * 0.08);
       q.setFromAxisAngle(_Y, far ? b.phase : t * 1.4 + b.phase); s.setScalar(1.25);
-      this._v.set(b.pos.x, y, b.pos.z); m.compose(this._v, q, s); this.mesh.setMatrixAt(i, m);
-      gp.setXYZ(i, b.pos.x, b.pos.y + 0.55, b.pos.z);
+      this._v.set(b.pos.x, y, b.pos.z); m.compose(this._v, q, s); this.mesh.setMatrixAt(n++, m);
     });
+    this.mesh.count = n;
     this.mesh.instanceMatrix.needsUpdate = true; gp.needsUpdate = true;
     for (const k of this.kiosks) { const u = k.mesh.userData; u.card.rotation.y = t * 1.2; u.card.position.y = 1.55 + Math.sin(t * 1.6) * 0.08; }
     if (this.beacon.visible) { const u = this.beacon.userData; u.gem.rotation.y = t * 2; u.gem.position.y = 4.2 + Math.sin(t * 2.4) * 0.25; u.shaft.material.opacity = 0.22 + Math.sin(t * 3) * 0.06; }

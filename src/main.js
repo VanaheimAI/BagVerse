@@ -10,6 +10,7 @@ import { createGfx, PRESETS, ORDER, BACKEND } from './gfx.js';   // WebGL (gfx.j
 import { Grass } from './grass.js';
 import { Trees } from './trees.js';
 import { Kit } from './kit.js';
+import { setCreativeScale } from './creatives.js';
 import { placeBillboardModels } from './standees.js';
 import { prepareVaults, placeVaults, vaultFront, VAULTS } from './landmarks.js';
 import { NightLights } from './nightlights.js';
@@ -67,7 +68,7 @@ const store = {
 };
 const MOBILE = /Android|iPhone|iPad/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);   // iPadOS reports as a Mac
 // one-time reset (v2 render pipeline): tiers that were lowered automatically by older crash heuristics go back to default
-if (store.get('bagverse.pipeline') !== '3') { store.set('bagverse.q', null); store.set('bagverse.boot', null); store.set('bagverse.pipeline', '3'); }   // v3: everyone back to the LOW default once
+if (store.get('bagverse.pipeline') !== '4') { store.set('bagverse.q', null); store.set('bagverse.boot', null); store.set('bagverse.safe', null); store.set('bagverse.pipeline', '4'); }   // v4 (lighter phone build): tiers lowered by old crashes go back to the device default once
 // first visit (no tier chosen or remembered): pick from the device. Phones / tablets stay LOW (their memory limits
 // were behind the old crashes); desktops get HIGH on a dedicated / Apple-silicon GPU, MEDIUM on integrated ones,
 // LOW on software renderers. The slow-frame guard below still steps down live if a pick turns out too heavy.
@@ -104,14 +105,18 @@ addEventListener('pagehide', clearBoot);
 document.addEventListener('visibilitychange', () => (document.hidden ? clearBoot() : FIXED_DT || markBoot()));
 const Q = {
   high:   { ao: true,  csm: true,  gi: true,  surf: true,  grass: 90000, grassR: 42, dpr: 1.5, npcs: 16, aa: true },
-  medium: { ao: true,  csm: false, gi: true,  surf: true,  grass: 40000, grassR: 32, dpr: 1.0, npcs: 12, aa: true },
+  medium: { ao: false, csm: false, gi: true,  surf: true,  grass: 40000, grassR: 32, dpr: 1.0, npcs: 12, aa: true },
   low:    { ao: false, csm: false, gi: false, surf: false, grass: 14000, grassR: 22, dpr: 1.0, npcs: 8,  aa: false },
 }[quality];
 const LOW = quality === 'low';
 if (SAFE) Object.assign(Q, { grass: 0, npcs: 4 });
 // LOW loads the phone copies of textured assets (<name>.m.glb: textures capped at 512 px for the world and props,
 // 1024 px for characters and the platform; built by `npm run build:mobile`)
-const A = (name) => `assets/${name}${LOW ? '.m' : ''}.glb`;
+// phones load the light copies on every tier (MEDIUM / HIGH on a phone with desktop textures was ~1 GB of GPU memory,
+// and iOS kills the tab: the game "restarting on its own")
+const LIGHT = LOW || MOBILE;
+const NOCULL = params.has('nocull');
+const A = (name) => `assets/${name}${LIGHT ? '.m' : ''}.glb`;
 
 // ---------------------------------------------------------------- renderer
 const canvas = $('game');
@@ -119,15 +124,29 @@ const canvas = $('game');
 // and a 4K / high-DPI screen at 1.5x would otherwise allocate hundreds of MB of GPU memory
 const MAX_PX = SAFE ? 0.7e6 : { high: 2.6e6, medium: 2.0e6, low: 1.2e6 }[quality];
 const pixelRatio = () => Math.max(0.5, Math.min(devicePixelRatio, Q.dpr, Math.sqrt(MAX_PX / (innerWidth * innerHeight))));
-const onGfxLost = () => {   // lost WebGL context / WebGPU device: restart one tier lower
+// lost WebGL context / WebGPU device. Phones drop the GPU context of a page that goes to the background (app switch,
+// lock screen, a wallet or X sign-in opening): that is not a crash, so the tier stays and nothing reloads until the
+// player is back. A loss while playing (the GPU really ran out) restarts one tier lower. Progress is saved first.
+let gfxLostShown = false;
+const onGfxLost = () => {
+  if (gfxLostShown) return; gfxLostShown = true;
+  const background = document.hidden || performance.now() - lastShownAt < 4000;   // hidden, or just came back
+  try { window.__bagverse?.progress?.save(); } catch (_) {}
   const lower = QUALITIES[Math.max(0, QUALITIES.indexOf(quality) - 1)];
-  store.set('bagverse.q', lower); clearBoot();
-  if (quality === 'low') store.set('bagverse.safe', '1');   // already at the bottom: next run in SAFE mode
+  if (!background) {
+    store.set('bagverse.q', lower);
+    if (quality === 'low') store.set('bagverse.safe', '1');   // already at the bottom: next run in SAFE mode
+  }
+  clearBoot();
   const o = document.createElement('div'); o.id = 'gfxcrash';
-  o.innerHTML = `<b>GRAPHICS RESET</b><span>Your GPU dropped the game. Restarting at ${lower.toUpperCase()} quality…</span>`;
-  document.body.appendChild(o);
-  setTimeout(() => location.reload(), 1800);
+  o.innerHTML = background ? '<b>WELCOME BACK</b><span>Reloading the city… your progress is saved.</span>'
+    : `<b>GRAPHICS RESET</b><span>Your phone ran out of graphics memory. Restarting at ${(quality === 'low' ? 'SAFE' : lower).toUpperCase()} quality… your progress is saved.</span>`;
+  const go = () => { document.body.appendChild(o); setTimeout(() => location.reload(), background ? 600 : 1800); };
+  if (document.hidden) document.addEventListener('visibilitychange', function v() { if (!document.hidden) { document.removeEventListener('visibilitychange', v); go(); } });
+  else go();
 };
+let lastShownAt = -1e9;
+document.addEventListener('visibilitychange', () => { if (!document.hidden) lastShownAt = performance.now(); });
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 1200);
 const { renderer, look, composer, backend: GFX } = await createGfx(scene, camera, {
@@ -166,7 +185,9 @@ function releaseImagesAfterUpload(g) {
       if (v && v.isTexture && !v.isCanvasTexture && !v._bvRelease) {
         v._bvRelease = true;
         const prev = v.onUpdate;
-        v.onUpdate = (t) => { prev?.(t); const im = t.image; if (im && typeof im.close === 'function') { const w = im.width, h = im.height; im.close(); t.image = { width: w, height: h }; } };
+        v.onUpdate = (t) => { prev?.(t); const im = t.image; if (!im) return;
+          if (typeof im.close === 'function') { const w = im.width, h = im.height; im.close(); t.image = { width: w, height: h }; }
+          else if (t._bvCapped && im.getContext) { const w = im.width, h = im.height; im.width = im.height = 1; t.image = { width: w, height: h }; } };   // capTextures' canvas
       }
     }
   });
@@ -174,7 +195,7 @@ function releaseImagesAfterUpload(g) {
 }
 async function loadModel(url, key, ldr = loader) {
   const g = await loadModelRaw(url, key, ldr);
-  return LOW ? releaseImagesAfterUpload(g) : g;
+  return LIGHT ? releaseImagesAfterUpload(g) : g;
 }
 async function loadModelRaw(url, key, ldr = loader) {
   const prog = key ? onProg(key) : () => {};
@@ -216,14 +237,14 @@ function capTextures(g, max) {
       c.width = Math.round(img.width * f); c.height = Math.round(img.height * f);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       if (img.close) img.close();          // free the full-size ImageBitmap
-      t.image = c; t.needsUpdate = true; done.add(t);
+      t.image = c; t._bvCapped = true; t.needsUpdate = true; done.add(t);
     }
   });
 }
 function loadChar(id, key = null) {
   return (charLoads[id] ||= loadModel(A(id), key, key ? loader : lazyLoader).then((g) => {
     g.userData.charId = id;   // lazy emote clips are per character
-    if (LOW) capTextures(g, 1024);
+    if (LIGHT) capTextures(g, 1024);
     CHARS[id] = g;
     return g;
   }).catch((e) => { delete charLoads[id]; throw e; }));
@@ -241,10 +262,10 @@ const carsGltf = await loadModel(A('cars'), 'cars');
 // vehicles. The Vision 1789 car is parked for now (not enough road in the Square): ?car brings it back.
 // Scooters are what players ride: summoned from their garage (the punk scooter is owned by default while testing).
 const visionGltf = params.has('car') ? await loadModel(A('vision'), 'vision').catch((e) => { console.warn('vision car failed to load', e); return null; }) : null;
-const standeeGltf = await loadModel('assets/standing_billboard.glb', 'standing_billboard').catch((e) => { console.warn('standing billboard failed', e); return null; });
-const archGltf = await loadModel('assets/billboard_archway.glb', 'billboard_archway').catch((e) => { console.warn('archway billboard failed', e); return null; });
+const standeeGltf = await loadModel(A('standing_billboard'), 'standing_billboard').catch((e) => { console.warn('standing billboard failed', e); return null; });
+const archGltf = await loadModel(A('billboard_archway'), 'billboard_archway').catch((e) => { console.warn('archway billboard failed', e); return null; });
 const vaultGltfs = {};
-for (const n of ['wano_vault', 'kanto_vault']) vaultGltfs[n] = await loadModel(`assets/${n}.glb`, n).catch((e) => { console.warn('vault model failed', n, e); return null; });
+for (const n of ['wano_vault', 'kanto_vault']) vaultGltfs[n] = await loadModel(A(n), n).catch((e) => { console.warn('vault model failed', n, e); return null; });
 for (const n of ['gm_arch', 'doge_statue']) vaultGltfs[n] = await loadModel(A(n), n).catch((e) => { console.warn('landmark model failed', n, e); return null; });   // GM arch + Doge statue (src/landmarks.js PROPS)
 const bagGltfs = {};
 for (const c of ['green', 'gold', 'purple']) bagGltfs[c] = await loadModel(`assets/bag_${c}.glb`, 'bag_' + c).catch((e) => { console.warn('bag model failed', c, e); return null; });
@@ -252,12 +273,13 @@ setBagModels(bagGltfs);
 const scooterGltf = await loadModel(A('scooter'), 'scooter').catch((e) => { console.warn('scooter failed to load', e); return null; });
 for (const r of [...carsGltf.scene.children]) kitGltf.scene.add(r);
 
+setCreativeScale(LIGHT ? 0.5 : 1);   // phones: half-resolution screen creatives
 const world = new World(scene);
 prepareVaults(world, vaultGltfs);   // Wano Vault (old RWA Vault) + Kanto Vault (old APEX Arena): collider, holograms, labels
 await world.init(worldGltf);
 placeVaults(scene, world, vaultGltfs, { shadows: !LOW });
 
-const kit = new Kit(scene, kitGltf, world.kitSpots, { shadows: !LOW });
+const kit = new Kit(scene, kitGltf, world.kitSpots, { shadows: !LOW, cull: { far: { low: 110, medium: 180, high: 260 }[quality], ring: LOW ? 20 : quality === 'medium' ? 60 : 90 } });
 world.placeProps(propGltfs, { shadows: !LOW });   // golden bull (Bull Run), Pepe bust (Swamp)
 placeBillboardModels(scene, world, { totem: standeeGltf, gantry: archGltf }, { shadows: !LOW });   // the user's billboard models: plaza totems (BB_19/20), avenue gantries (BB_16-18)
 const nightLights = new NightLights(scene, world.kitSpots, { count: LOW ? 0 : quality === 'medium' ? 6 : 10 });
@@ -320,6 +342,7 @@ document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx.
 let missionsUI = null;
 const quests = new Quests(progress, { touch: input.touch, onToast: (m, kind) => { if (kind === 'big') hud.toast(m); missionsUI?.feed(m, 'quest'); sfx.play(kind === 'big' ? 'achieve' : 'success'); } });
 const collect = new Collectibles(scene, world, progress);
+collect.draw = LOW ? 60 : 90;   // money bags are drawn this close (their glow marks the rest)
 missionsUI = new MissionsUI({ progress, quests, collect, touch: input.touch });
 missionsUI.onToast = (m) => { hud.toast(m); sfx.play('gift'); };
 { const o = missionsUI.open.bind(missionsUI); missionsUI.open = (t) => { if (!missionsUI.isOpen) sfx.play('open'); o(t); }; }
@@ -1426,7 +1449,7 @@ function captureShot(from, at) {
     return c;
   } finally { camera.position.copy(pp); camera.quaternion.copy(pq); camera.fov = fov; camera.aspect = asp; camera.updateProjectionMatrix(); camera.updateMatrixWorld(); }
 }
-const tags = new Tags({ scene, world, progress, hud, sfx, quests, player, cam, enabled: accountsOn(),
+const tags = new Tags({ small: LIGHT, scene, world, progress, hud, sfx, quests, player, cam, enabled: accountsOn(),
   account: () => account, signIn: () => showLogin(true), capture: captureShot,
   travel: (z) => hud.onTravel?.(z), beforeSpray: () => pushCloud(true) });
 refreshAccount();
@@ -1517,6 +1540,7 @@ function frame() {
   tags?.update();
 
   if (window.__camOverride) { const o = window.__camOverride; camera.position.set(...o.pos); camera.lookAt(...o.at); }   // test/screenshot hook
+  if (!NOCULL) kit.cull(camera, veh ? veh.pos : player.root.position);   // per-instance culling of the city kit (?nocull: off)
   look.update(t, player.root.position);
   if (grass) grass.update(t, camera.position);
   trees.update(dt, camera);

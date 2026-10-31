@@ -22,8 +22,10 @@ export async function exportMap({ scene, trees }) {
     else if (/^PROP_/.test(n)) bucket('Landmarks').add(o.clone(true));
     else if (/^STANDEE_/.test(n)) bucket('Billboards').add(o.clone());
     else if (/^KIT_/.test(n) && !/^KIT_CAR_/.test(n) && o.isInstancedMesh) {
-      const m = new THREE.InstancedMesh(o.geometry, o.material, o.count); m.name = n;
-      for (let i = 0; i < o.count; i++) { const M = new THREE.Matrix4(); o.getMatrixAt(i, M); m.setMatrixAt(i, M); }
+      const all = o.userData.all;   // the game culls instances per frame: export every one
+      const m = new THREE.InstancedMesh(o.geometry, o.material, all ? all.length : o.count); m.name = n;
+      if (all) all.forEach((M, i) => m.setMatrixAt(i, M));
+      else for (let i = 0; i < o.count; i++) { const M = new THREE.Matrix4(); o.getMatrixAt(i, M); m.setMatrixAt(i, M); }
       m.matrix.copy(o.matrix); m.matrixAutoUpdate = false; bucket('Props').add(m);
     }
   }

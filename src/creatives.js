@@ -76,16 +76,31 @@ const LIB = [
     glowText(g, 'ARENA SHOOTER · SOON', w / 2, h * 0.8, 42, '#ffffff', 'Rajdhani', 700, 6); return c; },
 ];
 
+// screen textures are shared: every screen showing the same creative uses one texture (20 screens used to hold 45
+// full-size copies). LOW (phones) draws them at half resolution: 512 x 288 instead of 1024 x 576.
+let SCALE = 1;
+export function setCreativeScale(s) { SCALE = s; }
+const shared = new Map();
+function sharedCreative(i, vertical) {
+  const key = i + (vertical ? 'v' : 'h');
+  if (shared.has(key)) return shared.get(key);
+  const w = vertical ? 576 : 1024, h = vertical ? 1024 : 576;
+  let c = LIB[i](w, h, vertical);
+  if (SCALE < 1) {   // drawn at full size (the layouts use pixel font sizes), then shrunk
+    const d = canvas(Math.round(w * SCALE), Math.round(h * SCALE)), g = d.getContext('2d');
+    g.imageSmoothingQuality = 'high'; g.drawImage(c, 0, 0, d.width, d.height); c.width = c.height = 1; c = d;
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.flipY = false; tex.anisotropy = 4;
+  shared.set(key, tex);
+  return tex;
+}
+
 /** two-ish creatives per screen, rotated by the world. */
 export function billboardCreatives(slot, vertical) {
-  const w = vertical ? 576 : 1024, h = vertical ? 1024 : 576;
-  const picks = [LIB[slot % LIB.length], LIB[(slot * 7 + 3) % LIB.length]];
-  if (slot % 4 === 0) picks.unshift(LIB[0]);   // a quarter of the screens advertise themselves as open
-  return picks.map((f) => {
-    const tex = new THREE.CanvasTexture(f(w, h, vertical));
-    tex.colorSpace = THREE.SRGBColorSpace; tex.flipY = false; tex.anisotropy = 4;
-    return tex;
-  });
+  const picks = [slot % LIB.length, (slot * 7 + 3) % LIB.length];
+  if (slot % 4 === 0) picks.unshift(0);   // a quarter of the screens advertise themselves as open
+  return [...new Set(picks)].map((i) => sharedCreative(i, vertical));
 }
 
 export const isOpenSlot = (slot) => slot % 4 === 0;

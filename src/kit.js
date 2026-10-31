@@ -6,11 +6,19 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toWorldFloat } from './physics.js';
 
 const _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _y = new THREE.Vector3(0, 1, 0);
+const _frustum = new THREE.Frustum(), _pv = new THREE.Matrix4(), _sph = new THREE.Sphere(), _box = new THREE.Box3(), _c = new THREE.Color();
 
 export class Kit {
-  constructor(scene, gltf, spots, { shadows = true } = {}) {
+  /**
+   * cull: per-instance culling (each asset is one InstancedMesh for the whole map, so three can't cull it):
+   *   far = small props (lamps, signs, cars, bushes...) past this distance are skipped (big buildings never are)
+   *   ring = instances this close to the player always draw (their shadows can fall into view from behind the camera)
+   */
+  constructor(scene, gltf, spots, { shadows = true, cull = { far: Infinity, ring: 70 } } = {}) {
     gltf.scene.updateMatrixWorld(true);
     this.meshes = [];
+    this.groups = [];
+    this.cullOpts = cull;
     // asset -> [{ geometry, material }] (merged per material, baked to the asset's own space)
     const assets = {};
     for (const root of gltf.scene.children) {
@@ -75,8 +83,18 @@ export class Kit {
         _s.set(s.sx || 1, s.sz || 1, s.sy || 1);   // Blender x / y / z scale -> three x / z / y
         return new THREE.Matrix4().compose(s.pos, _q, _s);
       });
+      // one bounding sphere per instance (the union of the asset's parts)
+      _box.makeEmpty();
+      for (const { geometry } of parts) { geometry.computeBoundingBox(); _box.union(geometry.boundingBox); }
+      const local = _box.getBoundingSphere(new THREE.Sphere());
+      const spheres = mats4.map((m) => local.clone().applyMatrix4(m));
+      const group = { name, mats4, tints: list.some((s) => s.tint) ? list.map((s) => new THREE.Color(s.tint || '#ffffff')) : null, spheres,
+        small: local.radius * Math.max(...list.map((s) => Math.max(s.sx || 1, s.sy || 1, s.sz || 1))) < 7, meshes: [], vis: null };
+      this.groups.push(group);
       for (const { geometry, material } of parts) {
         const im = new THREE.InstancedMesh(geometry, material, list.length);
+        im.frustumCulled = false;   // culled per instance in cull()
+        im.userData.all = mats4;    // every instance (map export)
         im.name = 'KIT_' + name;
         const night = material.name === 'fac_kit_nightlight';
         im.castShadow = shadows && !night && !/^(Bush|Trash)/.test(name);
@@ -88,7 +106,33 @@ export class Kit {
         im.instanceMatrix.needsUpdate = true;
         im.computeBoundingSphere();
         scene.add(im);
-        this.meshes.push(im);
+        this.meshes.push(im); group.meshes.push(im);
+      }
+    }
+  }
+
+  /** per frame: draw only the instances in view (or near the player); re-uploads only when the visible set changes */
+  cull(camera, focus) {
+    const { far, ring } = this.cullOpts;
+    camera.updateMatrixWorld(); _pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _frustum.setFromProjectionMatrix(_pv);
+    const cp = camera.position;
+    for (const g of this.groups) {
+      const vis = g.next || (g.next = new Int32Array(g.mats4.length)); let n = 0;
+      for (let i = 0; i < g.spheres.length; i++) {
+        const sp = g.spheres[i], r = sp.radius;
+        const dx = sp.center.x - focus.x, dz = sp.center.z - focus.z;
+        if (dx * dx + dz * dz < (ring + r) * (ring + r)) { vis[n++] = i; continue; }
+        if (g.small && sp.center.distanceToSquared(cp) > far * far) continue;
+        if (_frustum.intersectsSphere(sp)) vis[n++] = i;
+      }
+      const prev = g.vis;
+      let same = prev && prev.n === n;
+      for (let k = 0; same && k < n; k++) if (prev.list[k] !== vis[k]) same = false;
+      if (same) continue;
+      g.vis = { n, list: vis.slice(0, n) };
+      for (const im of g.meshes) {
+        for (let k = 0; k < n; k++) { im.setMatrixAt(k, g.mats4[vis[k]]); if (g.tints && im.instanceColor) im.setColorAt(k, g.tints[vis[k]]); }
+        im.count = n; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
       }
     }
   }
