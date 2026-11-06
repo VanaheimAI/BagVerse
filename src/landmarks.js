@@ -43,8 +43,8 @@ export const VAULTS = {
     cuts: [
       { type: 'ring', c: [KANTO_C.x, KANTO_C.y], r0: 15.4, r1: 30.8, y1: 12, floorY: 0.35 },              // stands + glow ring
       { type: 'box', c: [KANTO_GATE.x, KANTO_GATE.y], n: [KANTO_N.x, KANTO_N.y], halfW: 14.5, halfD: 2.4, y1: 17, floorY: 0.35 },   // old arena gate
-      // the three city-kit towers standing in the old arena ring: gone, so the ring is open ground (Halloween Arena
-      // graveyard, Pumpkin Rush); boxes = each asset's footprint (kit.glb bbox x scale, rotated by rz) + 1 m
+      // the three city-kit towers standing in the old arena ring: gone, so the ring is open ground (the Thanksgiving
+      // Arena's Gobble Obby); boxes = each asset's footprint (kit.glb bbox x scale, rotated by rz) + 1 m
       { type: 'box', c: [155.8, 162.1], n: [-0.7210, 0.6929], halfW: 11.2, halfD: 14.6, y1: 90, floorY: 0.35 },   // Eco_Building_Grid (its collider box: 26.7 x 20 m)
       { type: 'box', c: [175.7, 139.7], n: [0.7827, 0.6224], halfW: 12.2, halfD: 10.2, y1: 90, floorY: 0.35 },   // Eco_Building_Grid
       { type: 'box', c: [131.6, 172.9], n: [-0.6058, -0.7956], halfW: 12.5, halfD: 11.4, y1: 90, floorY: 0.35 },   // Regular_Building_TwistedTower_Large

@@ -73,7 +73,7 @@ export class Multiplayer {
     for (const r of this.remotes.values()) {
       const x = r.p.race; if (!x || !x.host || typeof x.id !== 'string' || typeof x.at !== 'number') continue;
       if (x.at < now + 1500 || x.at > now + 600000) continue;   // open, and not absurdly far ahead
-      out.push({ race: { id: str(x.id, 16), game: x.game === 'tiledrop' ? 'tiledrop' : 'bagrun', plan: str(x.plan, 16), seed: num(x.seed, 0, 4294967295) >>> 0, at: x.at, host: false }, by: this.displayName(r) });
+      out.push({ race: { id: str(x.id, 16), game: ['tiledrop', 'obby'].includes(x.game) ? x.game : 'bagrun', plan: str(x.plan, 16), seed: num(x.seed, 0, 4294967295) >>> 0, at: x.at, host: false }, by: this.displayName(r) });
     }
     return out;
   }

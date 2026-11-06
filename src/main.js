@@ -32,8 +32,8 @@ import { MissionsUI } from './missions_ui.js';
 import { Audio } from './audio.js';
 import { BagRun, RunUI } from './minigames/bagrun.js';
 import { TileDrop } from './minigames/tiledrop.js';
-import { PumpkinRush } from './minigames/pumpkinrush.js';
-import { buildHalloween, HALLOWEEN_ON } from './halloween.js';
+import { GobbleObby, ObbyPhysics, fmtTime } from './minigames/obby.js';
+import { buildThanksgiving, THANKSGIVING_ON } from './thanksgiving.js';
 import { Multiplayer } from './multiplayer.js';
 import { Leaderboard } from './leaderboard.js';
 import { Wallet, short as shortAddr, MOBILE as WALLET_MOBILE } from './wallet.js';
@@ -347,10 +347,10 @@ missionsUI = new MissionsUI({ progress, quests, collect, touch: input.touch });
 missionsUI.onToast = (m) => { hud.toast(m); sfx.play('gift'); };
 { const o = missionsUI.open.bind(missionsUI); missionsUI.open = (t) => { if (!missionsUI.isOpen) sfx.play('open'); o(t); }; }
 // ---- mini-games: BAG RUN (portal in the plaza)
-const runUI = new RunUI(() => (tileDrop.active ? tileDrop.finish(true) : graveDrop.active ? graveDrop.finish(true) : pumpkinRush.active ? pumpkinRush.finish(true) : bagRun.finish(true)));
+const runUI = new RunUI(() => (tileDrop.active ? tileDrop.finish(true) : obby?.active ? obby.finish(true) : bagRun.finish(true)));
 const bagRun = new BagRun({ scene, world, player, progress, quests, sfx, hud, collect, ui: runUI });
 bagRun.onTrip = () => { player.body.vel.x *= 0.15; player.body.vel.z *= 0.15; if (veh) veh.v *= 0.2; };
-const inGame = () => bagRun.active || tileDrop.active || graveDrop.active || pumpkinRush.active;
+const inGame = () => bagRun.active || tileDrop.active || !!obby?.active;
 function startBagRun(race = null) {
   if (inGame()) return;
   fx.through(() => startBagRunNow(race));
@@ -389,8 +389,7 @@ function joinRace(race) {
   if (!race || race.at < Date.now() + 1200) { hud.toast('THAT RACE ALREADY STARTED'); return; }
   invite.hidden = true; inviteRace = null;
   if (race.game === 'tiledrop') startTileDrop({ ...race, host: false });
-  else if (race.game === 'gravedrop') startTileDrop({ ...race, host: false }, graveDrop);
-  else if (race.game === 'pumpkin') startPumpkin({ ...race, host: false });
+  else if (race.game === 'obby') { if (obby) startObby({ ...race, host: false }); }
   else startBagRun({ ...race, host: false });
 }
 invite.onclick = (e) => { if (e.target.dataset.x) { declined.add(inviteRace?.id); invite.hidden = true; return; } joinRace(inviteRace); };
@@ -401,7 +400,7 @@ function raceFrame() {
     const x = open[0]; inviteRace = x.race;
     const secs = Math.ceil((x.race.at - Date.now()) / 1000);
     invite.innerHTML = '';
-    const GAME = { tiledrop: '🟩 {N}\'S TILE DROP MATCH', gravedrop: '🪦 {N}\'S GRAVE DROP MATCH', pumpkin: '🎃 {N}\'S PUMPKIN RUSH' }[x.race.game] || '🏁 {N}\'S BAG RUN RACE';
+    const GAME = { tiledrop: '🟩 {N}\'S TILE DROP MATCH', obby: '🦃 {N}\'S GOBBLE OBBY RACE' }[x.race.game] || '🏁 {N}\'S BAG RUN RACE';
     const t = document.createElement('span'); t.textContent = `${GAME.replace('{N}', x.by.toUpperCase())} · STARTS IN ${secs}s`;
     const k = document.createElement('b'); k.textContent = input.touch ? 'TAP TO JOIN' : 'Y · JOIN';
     const c = document.createElement('i'); c.textContent = '✕'; c.dataset.x = '1';
@@ -416,10 +415,9 @@ function raceFrame() {
     if (bagRun.race.host && bagRun.state === 'run') mp.setRace(null);   // started: stop inviting
   }
   // during a Tile Drop match: my tiles + survival out, everyone else's in
-  for (const td of [tileDrop, graveDrop]) {
-    if (!td.active || !td.race) continue;
-    const id = td.race.id, T = td.state === 'run' ? td.clock - td.startClock : 0;
-    mp.setRun({ id, g: td === graveDrop ? 'gd' : 'td', s: Math.floor((td.me.out || T) * 10), d: td.me.out ? 1 : 0, tl: td.mine.map((v) => v.toString(36)).join(',') });
+  if (tileDrop.active && tileDrop.race) {
+    const td = tileDrop, id = td.race.id, T = td.state === 'run' ? td.clock - td.startClock : 0;
+    mp.setRun({ id, g: 'td', s: Math.floor((td.me.out || T) * 10), d: td.me.out ? 1 : 0, tl: td.mine.map((v) => v.toString(36)).join(',') });
     const rivals = [];
     for (const r of mp.remotes.values()) {
       const x = r.p.run; if (!x || x.id !== id || r.isMe) continue;
@@ -429,29 +427,30 @@ function raceFrame() {
     td.rivalList = rivals;
     if (td.race.host && td.state === 'run') mp.setRace(null);
   }
-  // during a Pumpkin Rush match: my haul out, everyone else's in
-  if (pumpkinRush.active && pumpkinRush.race) {
-    const id = pumpkinRush.race.id;
-    mp.setRun({ id, g: 'pr', s: pumpkinRush.haul, d: 0 });
-    const rivals = [];
-    for (const r of mp.remotes.values()) { const x = r.p.run; if (x && x.id === id && !r.isMe) rivals.push({ name: mp.displayName(r).slice(0, 14), score: Math.max(0, +x.s || 0) | 0 }); }
-    pumpkinRush.rivalList = rivals;
-    if (pumpkinRush.race.host && pumpkinRush.state === 'run') mp.setRace(null);
+  // during a Gobble Obby race: my progress out (s = finish rank key, p = furthest element, t = time), everyone else's in
+  if (obby?.active && obby.race) {
+    const id = obby.race.id;
+    mp.setRun(obbyRun(obby.race.id, obby.done, obby.time, obby.maxIdx));
+    obby.rivalList = obbyRivals(id);
+    if (obby.race.host && obby.state === 'run') mp.setRace(null);
   }
+}
+/** obby race presence: s sorts finishers first (faster = higher) for the shared board helpers */
+const obbyRun = (id, done, time, p) => ({ id, g: 'ob', s: done ? 100000 - Math.min(99999, Math.round(time * 10)) : p | 0, d: done ? 1 : 0, p: p | 0, t: done ? Math.round(time * 10) : 0 });
+function obbyRivals(id) {
+  const out = [];
+  for (const r of mp.remotes.values()) { const x = r.p.run; if (!x || x.id !== id || r.isMe) continue;
+    const done = !!x.d, t = Math.min(6000, Math.max(0, +x.t || 0)) / 10;
+    out.push({ name: mp.displayName(r).slice(0, 14), done: done && t > 0, time: t, prog: Math.min(200, Math.max(0, +x.p || 0)) | 0 }); }
+  return out;
 }
 // ---- mini-game 2: TILE DROP (portal in the plaza; the Doge Park kiosk event)
 const tileDrop = new TileDrop({ scene, player, progress, quests, sfx, hud, ui: runUI, getChars: () => Object.values(CHARS) });
-// ---- Halloween Arena (the old APEX arena ring): GRAVE DROP (Tile Drop over a floating graveyard, high above the
-// ring's 61 m rocket and the Bull Run towers) + PUMPKIN RUSH (on the ring itself)
-const halloween = HALLOWEEN_ON ? buildHalloween(scene, world) : null;
-const graveDrop = new TileDrop({ scene, player, progress, quests, sfx, hud, ui: runUI, getChars: () => Object.values(CHARS), arena: { x: 145, z: 155, y: 100 }, theme: 'grave', id: 'gravedrop', name: 'GRAVE DROP' });
-const pumpkinRush = new PumpkinRush({ scene, world, player, progress, quests, sfx, hud, ui: runUI, getChars: () => Object.values(CHARS) });
-// both Halloween games run at night; your own time of day comes back afterwards
-let lookBefore = null;
-function spookyNight(on) {
-  if (on && lookBefore === null) { lookBefore = lookName; if (lookName !== 'night') { setLook('night'); try { localStorage.setItem('bagverse.look', lookBefore); } catch (_) {} } }
-  else if (!on && lookBefore !== null) { const b = lookBefore; lookBefore = null; if (b !== lookName) setLook(b); }
-}
+// ---- Thanksgiving Arena (the old APEX arena ring): the GOBBLE OBBY, a floating obstacle course spiralling up round a
+// giant turkey. The course is solid all the time (the player's physics = world + course), the timed run starts at its pad.
+const thanks = THANKSGIVING_ON ? buildThanksgiving(scene, world, { light: LIGHT }) : null;
+const obby = thanks ? new GobbleObby({ scene, player, progress, quests, sfx, hud, ui: runUI, getChars: () => Object.values(CHARS), course: thanks.course }) : null;
+if (thanks) player.physics = new ObbyPhysics(world.physics, thanks.course);
 function startTileDrop(race = null, game = tileDrop) {
   if (inGame()) return;
   fx.through(() => startTileDropNow(race, game));
@@ -462,17 +461,14 @@ function startTileDropNow(race, game = tileDrop) {
   if (crowd.flashmob) crowd.endFlashmob();
   hud.closeModal(); missionsUI.close();
   quests.emit('portal', 1);
-  if (game === graveDrop) spookyNight(true);
   game.begin(showTileResults, race);
-  if (!game.active) spookyNight(false);
-  if (game.active && race) { mp.setRace(race); mp.setRun({ id: race.id, g: game === graveDrop ? 'gd' : 'td', s: 0, d: 0, tl: '' }); }
+  if (game.active && race) { mp.setRace(race); mp.setRun({ id: race.id, g: 'td', s: 0, d: 0, tl: '' }); }
 }
 function tileDropMenu(game = tileDrop) {
   if (inGame()) return;
-  const S = game.S, grave = game === graveDrop;
-  hud.modal(grave ? '🪦 GRAVE DROP' : 'TILE DROP', `
-    ${grave ? `<p>Three floors of cracked tombstones float over the Halloween Arena. Every stone you step on crumbles half a second later, and <b>lightning</b> marks stones that are about to go (purple). Fall through all three and you haunt the match as a ghost. <b>Last one standing wins.</b></p>`
-    : `<p>Three floors of tiles over the plaza. Every tile you step on falls half a second later. Drop through a floor and you land on the next; fall through the last one and you're out. <b>Last one standing wins.</b></p>`}
+  const S = game.S;
+  hud.modal('TILE DROP', `
+    <p>Three floors of tiles over the plaza. Every tile you step on falls half a second later. Drop through a floor and you land on the next; fall through the last one and you're out. <b>Last one standing wins.</b></p>
     <div class="row"><span>Your best</span><b>${S.best.toLocaleString()}</b></div>
     <div class="row"><span>Wins</span><b>${S.wins}</b></div>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button id="td-solo">PLAY VS BOTS</button>${mp.room ? '<button class="ghost" id="td-host">🟩 HOST A MATCH (STARTS IN 15 S)</button>' : ''}</div>
@@ -481,15 +477,13 @@ function tileDropMenu(game = tileDrop) {
   $('td-solo').onclick = () => startTileDrop(null, game);
   if ($('td-host')) $('td-host').onclick = () => {
     startTileDrop({ id: Math.random().toString(36).slice(2, 10), game: game.id, seed: (Math.random() * 4294967295) >>> 0, at: Date.now() + 15000, host: true }, game);
-    hud.chat('SYSTEM', 'BagVerse', `You opened a ${grave ? 'Grave Drop' : 'Tile Drop'} match. Teammates have 15 s to join.`, '#3dfff0');
+    hud.chat('SYSTEM', 'BagVerse', 'You opened a Tile Drop match. Teammates have 15 s to join.', '#3dfff0');
   };
 }
 function showTileResults(r) {
-  const game = r.game || tileDrop, grave = game === graveDrop, NAME = grave ? 'GRAVE DROP' : 'TILE DROP', Name = grave ? 'Grave Drop' : 'Tile Drop';
-  if (grave) spookyNight(false);
-  if (r.race) { mp.setRace(null); mp.setRun({ id: r.race.id, g: grave ? 'gd' : 'td', s: Math.floor(r.time * 10), d: 1, w: r.win ? 1 : 0, tl: game.mine.map((v) => v.toString(36)).join(',') }); }
+  const game = r.game || tileDrop, NAME = 'TILE DROP', Name = 'Tile Drop';
+  if (r.race) { mp.setRace(null); mp.setRun({ id: r.race.id, g: 'td', s: Math.floor(r.time * 10), d: 1, w: r.win ? 1 : 0, tl: game.mine.map((v) => v.toString(36)).join(',') }); }
   if (r.quit) { hud.toast('LEFT ' + NAME); return; }
-  if (grave) { quests.emit('halloween', 1); if (r.win) quests.emit('grave_win', 1); quests.checkAchievements(); }
   if (r.win) hud.chat('SYSTEM', Name, `${progress.s.name} won ${Name} (${Math.floor(r.time)} s)!`, '#7cff3d');
   hud.modal(r.win ? `${NAME} · YOU WIN! 🏆` : `${NAME} · RESULTS`, `
     <div class="rr-score"><small>${r.win ? 'LAST ONE STANDING' : `PLACED #${r.place} OF ${r.of}`}</small><b>${r.score.toLocaleString()}</b>${r.pb ? '<em>NEW PERSONAL BEST!</em>' : ''}</div>
@@ -519,55 +513,54 @@ function showTileResults(r) {
   $('td-again').onclick = () => { hud.closeModal(); tileDropMenu(game); };
   $('td-back').onclick = () => hud.closeModal();
 }
-function startPumpkin(race = null) {
-  if (inGame()) return;
+function startObby(race = null) {
+  if (inGame() || !obby) return;
   fx.through(() => {
     if (inGame()) return;
     if (veh) dismount();
     if (crowd.flashmob) crowd.endFlashmob();
     hud.closeModal(); missionsUI.close();
-    spookyNight(true);
-    pumpkinRush.begin(showPumpkinResults, race);
-    if (!pumpkinRush.active) { spookyNight(false); return; }
-    if (race) { mp.setRace(race); mp.setRun({ id: race.id, g: 'pr', s: 0, d: 0 }); }
+    obby.begin(showObbyResults, race);
+    if (obby.active && race) { mp.setRace(race); mp.setRun(obbyRun(race.id, false, 0, 0)); }
   });
 }
-function pumpkinMenu() {
-  if (inGame()) return;
-  const S = pumpkinRush.S;
-  hud.modal('🎃 PUMPKIN RUSH', `
-    <p>A 3-minute night round on the Halloween Arena ring. Grab the glowing jack-o'-lanterns: <b>orange = 1</b>, <b style="color:#ffd23d">gold = 5</b>. Watch out for <b style="color:#9bd35a">rotten pumpkins</b>: they're rug pulls that freeze you for 2 s and cost a quarter of your haul.</p>
-    <div class="row"><span>Best haul</span><b>${S.best}</b></div>
+function obbyMenu() {
+  if (inGame() || !obby) return;
+  const S = obby.S;
+  hud.modal('🦃 GOBBLE OBBY', `
+    <p>A floating obstacle course spirals up round the giant turkey: <b>hay bales, corn-cob beams, pies, crumbling crusts, sliding platters, spinning lazy susans and rolling pins</b>. Cranberry sauce bounces you up. Five stages with checkpoints; fall and you go back to the last one. <b>First to the feast table wins.</b></p>
+    <div class="row"><span>Best time</span><b>${fmtTime(S.best)}</b></div>
+    <div class="row"><span>Feasts reached</span><b>${S.finishes}</b></div>
     <div class="row"><span>Wins</span><b>${S.wins}</b></div>
-    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button id="pr-solo">PLAY VS BOTS</button>${mp.room ? '<button class="ghost" id="pr-host">🎃 HOST A MATCH (STARTS IN 15 S)</button>' : ''}</div>
-    ${mp.room ? `<p style="opacity:.7">${mp.count ? `${mp.count} other player${mp.count > 1 ? 's' : ''} online: they get a join invite.` : 'Nobody else is online right now, but your match stays open for 15 s.'}</p>` : ''}`);
-  $('pr-solo').onclick = () => startPumpkin();
-  if ($('pr-host')) $('pr-host').onclick = () => {
-    startPumpkin({ id: Math.random().toString(36).slice(2, 10), game: 'pumpkin', seed: (Math.random() * 4294967295) >>> 0, at: Date.now() + 15000, host: true });
-    hud.chat('SYSTEM', 'BagVerse', 'You opened a Pumpkin Rush match. Teammates have 15 s to join.', '#ff8a00');
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button id="ob-solo">RACE VS BOTS</button>${mp.room ? '<button class="ghost" id="ob-host">🦃 HOST A RACE (STARTS IN 15 S)</button>' : ''}</div>
+    ${mp.room ? `<p style="opacity:.7">${mp.count ? `${mp.count} other player${mp.count > 1 ? 's' : ''} online: they get a join invite.` : 'Nobody else is online right now, but your race stays open for 15 s.'}</p>` : ''}
+    <p style="opacity:.7">Jump with ${input.touch ? 'JUMP' : 'Space'}. Jump over the rolling pins, and keep moving on the lazy susans. The course is open any time if you just want to climb.</p>`);
+  $('ob-solo').onclick = () => startObby();
+  if ($('ob-host')) $('ob-host').onclick = () => {
+    startObby({ id: Math.random().toString(36).slice(2, 10), game: 'obby', seed: (Math.random() * 4294967295) >>> 0, at: Date.now() + 15000, host: true });
+    hud.chat('SYSTEM', 'BagVerse', 'You opened a Gobble Obby race. Teammates have 15 s to join.', '#ff9a2e');
   };
 }
-function showPumpkinResults(r) {
-  spookyNight(false);
-  if (r.race) { mp.setRace(null); mp.setRun({ id: r.race.id, g: 'pr', s: r.score, d: 1 }); }
-  if (r.quit) { hud.toast('LEFT PUMPKIN RUSH'); return; }
-  quests.emit('halloween', 1); quests.checkAchievements();
-  if (r.win) hud.chat('SYSTEM', 'Pumpkin Rush', `${progress.s.name} won Pumpkin Rush with ${r.score} 🎃!`, '#ff8a00');
-  hud.modal(r.win ? '🎃 PUMPKIN RUSH · YOU WIN! 🏆' : '🎃 PUMPKIN RUSH · RESULTS', `
-    <div class="rr-score"><small>${r.of > 1 ? `PLACED #${r.place} OF ${r.of}` : 'YOUR HAUL'}</small><b>${r.score} 🎃</b>${r.pb ? '<em>NEW PERSONAL BEST!</em>' : ''}</div>
-    <div class="row"><span>Gold pumpkins</span><b>${r.golds}</b></div>
-    <div class="row"><span>Rug pulls</span><b>${r.rotten}</b></div>
-    <div class="row"><span>Best haul</span><b>${r.best}</b></div>
-    <div class="row"><span>XP</span><b style="color:#7cff3d">+${r.xp}${r.runsToday > 10 ? ' <small style="opacity:.7">(reduced after 10 rounds today)</small>' : ''}</b></div>
-    <div id="pr-stand"></div>
-    <div style="display:flex;gap:8px;margin-top:12px"><button id="pr-again">PLAY AGAIN</button><button class="ghost" id="pr-back">BACK TO THE CITY</button></div>`);
-  const draw = () => { const el = $('pr-stand'); if (!el) return;
-    let rows = r.standings;
-    if (r.race) rows = mp.raceBoard(r.race.id, { name: 'You', score: r.score, done: true });
-    el.replaceChildren(...rows.map((x, i) => { const d = document.createElement('div'); d.className = 'row' + (x.me ? ' me' : ''); const a = document.createElement('span'); a.textContent = `${i + 1}. ${x.name}`; const b = document.createElement('b'); b.textContent = x.score + ' 🎃'; d.append(a, b); return d; })); };
-  draw(); if (r.race) { let n = 0; const iv = setInterval(() => { draw(); if (++n > 30) clearInterval(iv); }, 1000); }
-  $('pr-again').onclick = () => { hud.closeModal(); pumpkinMenu(); };
-  $('pr-back').onclick = () => hud.closeModal();
+function showObbyResults(r) {
+  if (r.race) { mp.setRace(null); mp.setRun(obbyRun(r.race.id, r.done, r.time, obby.maxIdx)); }
+  if (r.quit) { hud.toast('LEFT THE GOBBLE OBBY'); return; }
+  if (r.win) hud.chat('SYSTEM', 'Gobble Obby', `${progress.s.name} won the Gobble Obby in ${fmtTime(r.time)}!`, '#ff9a2e');
+  hud.modal(r.win ? '🦃 GOBBLE OBBY · YOU WIN! 🏆' : '🦃 GOBBLE OBBY · RESULTS', `
+    <div class="rr-score"><small>${r.done ? (r.of > 1 ? `PLACED #${r.place} OF ${r.of}` : 'FEAST REACHED') : `OUT OF TIME · STAGE ${r.stage} OF 5`}</small><b>${r.done ? fmtTime(r.time) : '–'}</b>${r.pb ? '<em>NEW PERSONAL BEST!</em>' : ''}</div>
+    <div class="row"><span>Falls</span><b>${r.falls}</b></div>
+    <div class="row"><span>Best time</span><b>${fmtTime(r.best)}</b></div>
+    <div class="row"><span>XP</span><b style="color:#7cff3d">+${r.xp}${r.runsToday > 10 ? ' <small style="opacity:.7">(reduced after 10 runs today)</small>' : ''}</b></div>
+    <div id="ob-stand"></div>
+    <div style="display:flex;gap:8px;margin-top:12px"><button id="ob-again">RACE AGAIN</button><button class="ghost" id="ob-back">BACK TO THE CITY</button></div>`);
+  const row = (x, i) => { const d = document.createElement('div'); d.className = 'row' + (x.me ? ' me' : ''); const a = document.createElement('span'); a.textContent = `${i + 1}. ${x.name}${x.done ? '' : ' · still climbing'}`; const b = document.createElement('b'); b.textContent = x.done ? fmtTime(x.time) : `stage ${obby.stageOf(x.prog) + 1}`; d.append(a, b); return d; };
+  const rows = () => r.race ? [{ name: 'You', me: true, done: r.done, time: r.time, prog: obby.maxIdx }].concat(obbyRivals(r.race.id)).sort((a, b) => (b.done - a.done) || (a.done ? a.time - b.time : b.prog - a.prog)) : r.standings;
+  const draw = () => { const el = $('ob-stand'); if (el) el.replaceChildren(...rows().map(row)); };
+  draw();
+  if (r.race) {   // a match keeps updating while the others climb; a win over at least one rival goes on the board
+    let n = 0; const iv = setInterval(() => { draw(); const all = rows(); if (all.every((x) => x.done) || ++n > 60) { clearInterval(iv); if (all.length >= 2 && all[0].me && r.done) { lb.submit({ score: null, win: true }); hud.toast('🏆 RACE WON · +1 ON THE LEADERBOARD'); } } }, 1000);
+  }
+  $('ob-again').onclick = () => { hud.closeModal(); obbyMenu(); };
+  $('ob-back').onclick = () => hud.closeModal();
 }
 function showRunResults(r) {
   if (r.race) { mp.setRace(null); mp.setRun({ id: r.race.id, s: r.quit ? 0 : r.score, b: r.bags, d: 1 }); }
@@ -599,7 +592,7 @@ function showRunResults(r) {
   $('rr-again').onclick = () => { hud.closeModal(); bagRunMenu(); };
   $('rr-back').onclick = () => hud.closeModal();
 }
-addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; if (bagRun.active) bagRun.finish(true); if (tileDrop.active) tileDrop.finish(true); if (graveDrop.active) graveDrop.finish(true); if (pumpkinRush.active) pumpkinRush.finish(true); });
+addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; if (bagRun.active) bagRun.finish(true); if (tileDrop.active) tileDrop.finish(true); if (obby?.active) obby.finish(true); });
 const LOCK = (gate, what) => { if (progress.has(gate)) return true; hud.toast(`${what} UNLOCKS AT LV ${progress.gateLevel(gate)}`); sfx.play('error'); return false; };
 player.allow = (name) => LOCK('emote:' + name, name.toUpperCase());
 progress.on((ev) => {
@@ -915,7 +908,7 @@ function progressFrame(dt, t) {
   sfx.loop('scooter', { vol: veh === scooter && veh ? 0.25 + Math.min(1, sv / 6) * 0.75 : 0, rate: 0.6 + Math.min(1, sv / 11) * 0.9 });
   if (veh === scooter && veh?.braking && !brakeWas && sv > 3) sfx.play('brake');
   brakeWas = !!(veh?.braking);
-  sfx.loop('city', { vol: tileDrop.active || graveDrop.active ? 0 : bagRun.active || pumpkinRush.active ? 0.35 : 1, rate: 1 });
+  sfx.loop('city', { vol: tileDrop.active ? 0 : bagRun.active || obby?.active ? 0.35 : 1, rate: 1 });
   sfx.loop('crowd', { vol: inGame() ? 0 : THREE.MathUtils.clamp(1 - Math.hypot(P.x, P.z) / 45, 0, 1), rate: 1 });
   sfx.loop('pad', { vol: 0, rate: 1 });
   if (!lookSent) { lookAcc += Math.abs(input.look.dx) + Math.abs(input.look.dy); if (lookAcc > 500) { lookSent = true; quests.emit('look', 1); } }
@@ -954,7 +947,7 @@ function mapMarks() {
   const m = collect.kiosks.map((k) => ({ x: k.pos.x, z: k.pos.z, color: '#ffc83d', shape: 'diamond' }));
   for (const b of collect.bags) if (!b.found && Math.abs(b.pos.x - P.x) < 40 && Math.abs(b.pos.z - P.z) < 40) m.push({ x: b.pos.x, z: b.pos.z, color: '#5dff7a' });
   if (beaconTarget) m.push({ x: beaconTarget.x, z: beaconTarget.z, color: '#7cff3d', shape: 'ring' });
-  for (const d of halloween?.pads || []) m.push({ x: d.pos.x, z: d.pos.z, color: d.id === 'grave' ? '#b84dff' : '#ff8a00', shape: 'diamond' });
+  for (const d of thanks?.pads || []) m.push({ x: d.pos.x, z: d.pos.z, color: '#ff9a2e', shape: 'diamond' });
   return m.concat(tags?.marks() || [], mp.marks());
 }
 
@@ -1220,9 +1213,9 @@ function interactions(dt) {
   // RWA prize entry kiosks: free, level-gated tournament entries
   const kiosk = !promptHtml && collect.kioskNear(p);
   if (kiosk) { promptHtml = `<kbd>E</kbd> RWA ENTRY · ${kiosk.event.toUpperCase()}`; action = () => openKiosk(kiosk); }
-  // Halloween Arena pads
-  const pad = !promptHtml && halloween?.padAt(p);
-  if (pad) { promptHtml = pad.id === 'grave' ? '<kbd>E</kbd> 🪦 GRAVE DROP · LAST ONE STANDING' : '<kbd>E</kbd> 🎃 PUMPKIN RUSH · 3-MIN NIGHT HAUL'; action = pad.id === 'grave' ? () => tileDropMenu(graveDrop) : pumpkinMenu; }
+  // Thanksgiving Arena: the Gobble Obby pad
+  const pad = !promptHtml && thanks?.padAt(p);
+  if (pad) { promptHtml = '<kbd>E</kbd> 🦃 GOBBLE OBBY · RACE TO THE FEAST'; action = obbyMenu; }
   // Spray Spots: tag the wall you're standing at
   const tagSpot = !promptHtml && tags?.near(p);
   if (tagSpot) { promptHtml = tags.promptFor(tagSpot); action = () => tags.open(tagSpot); }
@@ -1461,7 +1454,7 @@ if (loginScreen) {   // keep the cloud copy fresh for signed-in players
 if (params.has('autostart')) start();
 else if (loginScreen) { $('loader').hidden = true; showLogin().then(openSkins); }
 else openSkins();
-window.__bagverse = { GFX, tags, captureShot, graveDrop, pumpkinRush, halloween, pumpkinMenu, startPumpkin, exportMap: () => import('./mapexport.js').then((m) => m.exportMap({ scene, trees })), openAdSlot, liveAds, fx, openCollection, raffles, openVault, tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
+window.__bagverse = { GFX, tags, captureShot, obby, thanks, obbyMenu, startObby, exportMap: () => import('./mapexport.js').then((m) => m.exportMap({ scene, trees })), openAdSlot, liveAds, fx, openCollection, raffles, openVault, tileDrop, startTileDrop, tileDropMenu, wallet, openWallet, paintUniforms, skins, nightLights, kit, trees, quality, surfaceUniforms, charUniforms, player, cam, car, scooter, sfx, bagRun, mp, lb, bagRunMenu, joinRace, startBagRun2: startBagRun, VAULTS, vaultFront, startBagRun, progress, quests, collect, missionsUI, enterCar: () => enterCar(), summonScooter: () => summonScooter(), world, crowd, hud, input, renderer, scene, camera, look, setLook };
 
 // slow-frame guard: after a short warm-up, a few seconds under ~22 fps sheds the heaviest effects live
 // and remembers the lower tier for next time
@@ -1493,7 +1486,7 @@ function frame() {
   const realDt = clock.getDelta();
   const dt = FIXED_DT || Math.min(realDt, 1 / 20);
   const t = clock.elapsedTime;
-  input.enabled = started && !hud.typing && !hud.modalOpen && !skins.isOpen && !(bagRun.active && bagRun.state === 'countdown') && !(tileDrop.active && tileDrop.state === 'countdown') && !(graveDrop.active && graveDrop.state === 'countdown') && !(pumpkinRush.active && (pumpkinRush.state === 'countdown' || pumpkinRush.frozen));
+  input.enabled = started && !hud.typing && !hud.modalOpen && !skins.isOpen && !(bagRun.active && bagRun.state === 'countdown') && !(tileDrop.active && tileDrop.state === 'countdown') && !(obby?.active && obby.state === 'countdown');
   if (skins.isOpen) {   // the selection screen owns the canvas: no world update / render while it is up
     sfx.loop('pad', { vol: 1, rate: 1 }); sfx.loop('city', { vol: 0, rate: 1 }); sfx.loop('crowd', { vol: 0, rate: 1 }); sfx.loop('steps', { vol: 0 }); sfx.loop('scooter', { vol: 0 });
     input.endFrame();
@@ -1529,9 +1522,8 @@ function frame() {
   }
   if (started) { mp.tick(dt); mp.indicators(camera, player.root.position); raceFrame(); if ((frame.lbt = (frame.lbt || 0) + dt) > 30) { frame.lbt = 0; lb.tick(); } }
   if (started && tileDrop.active) tileDrop.update(dt);
-  if (started && graveDrop.active) graveDrop.update(dt);
-  if (started && pumpkinRush.active) pumpkinRush.update(dt);
-  halloween?.update(t);
+  if (started && obby?.active) obby.update(dt);
+  thanks?.update(dt, camera.position);
   if (started && bagRun.active) bagRun.update(dt, player.body.pos);
   else if (started && progress.has('portals')) bagRun.warm(2);
   cam.update(dt, input, veh ? veh.pos : player.root.position);

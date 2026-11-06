@@ -1,5 +1,5 @@
 // GPU budget probe: per tier, on a phone-sized viewport, report draw calls, triangles, shadow maps, render targets
-// and an estimate of GPU texture memory.   node tools/perf_probe.mjs low|medium|high [outDir]
+// and an estimate of GPU texture memory.   node tools/perf_probe.mjs low|medium|high [outDir]   (env TRAVEL=<zone id>)
 import fs from 'node:fs';
 import { chromium } from 'playwright';
 const q = process.argv[2] || 'low', out = process.argv[3] || '/tmp/perf_probe'; fs.mkdirSync(out, { recursive: true });
@@ -10,6 +10,7 @@ const p = await ctx.newPage();
 const errs = []; p.on('pageerror', (e) => errs.push(e.message));
 await p.goto(`http://localhost:4175/?autostart&fixeddt=0.1&q=${q}${process.env.EXTRA || ''}`, { timeout: 900000, waitUntil: 'commit' });
 await p.waitForFunction('window.__ready && window.__frames > 3', null, { timeout: 900000 });
+if (process.env.TRAVEL) { await p.evaluate((id) => { const B = window.__bagverse; B.hud.onTravel(B.world.zones.find((z) => z.id === id)); }, process.env.TRAVEL); }   // TRAVEL=<zone id>: measure there
 const f0 = await p.evaluate('window.__frames'); await p.waitForFunction(`window.__frames > ${f0 + 4}`, null, { timeout: 900000, polling: 200 });
 await p.evaluate(() => { const R = window.__bagverse.renderer; R.info.autoReset = false; R.info.reset(); });
 const f1 = await p.evaluate('window.__frames'); await p.waitForFunction(`window.__frames > ${f1}`, null, { timeout: 900000, polling: 50 });
