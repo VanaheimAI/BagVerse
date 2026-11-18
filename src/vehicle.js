@@ -120,6 +120,8 @@ export class Car {
     const k = (a, b) => (input.down(...a) ? 1 : 0) - (input.down(...b) ? 1 : 0);
     let thr = k(['KeyW', 'ArrowUp'], ['KeyS', 'ArrowDown']), str = k(['KeyD', 'ArrowRight'], ['KeyA', 'ArrowLeft']);
     if (input.joy.x || input.joy.y) { thr = -input.joy.y; str = input.joy.x; }
+    const pt = input.pad?.rt || 0, pl = input.pad?.lt || 0;   // gamepad triggers: RT gas, LT brake / reverse
+    if (pt > 0.05 || pl > 0.05) thr = pt - pl;
     const hand = input.down('Space');
 
     const S = this.S;

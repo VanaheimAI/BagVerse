@@ -335,6 +335,14 @@ const cam = new FollowCamera(camera, world.physics);
 cam.yaw = 0;
 const input = new Input(canvas);
 const hud = new HUD(world, progress);
+addEventListener('bv-pad', (e) => {
+  if (!e.detail.connected) { hud.toast('🎮 CONTROLLER DISCONNECTED'); return; }
+  hud.toast('🎮 CONTROLLER CONNECTED');
+  let seen = true; try { seen = !!localStorage.getItem('bv_padhelp'); localStorage.setItem('bv_padhelp', '1'); } catch (_) {}
+  if (!seen) {
+    hud.chat('SYSTEM', 'BagVerse', '🎮 Left stick move · right stick look · A jump · B use · X scooter · Y flashmob · LT walk · RT/LT drive · LB/RB zoom · D-pad: missions / collection / emotes · View map · Menu back · L3 skins · R3 leaderboard', '#5fd8ff');
+  }
+});
 // ---- audio (DailySounds.org files in public/sfx, synth fallbacks until they're added)
 const sfx = new Audio();
 document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx.play('click'); }, true);
@@ -1486,6 +1494,7 @@ function frame() {
   const realDt = clock.getDelta();
   const dt = FIXED_DT || Math.min(realDt, 1 / 20);
   const t = clock.elapsedTime;
+  input.poll();   // gamepad -> keys / axes, before anything reads input this frame
   input.enabled = started && !hud.typing && !hud.modalOpen && !skins.isOpen && !(bagRun.active && bagRun.state === 'countdown') && !(tileDrop.active && tileDrop.state === 'countdown') && !(obby?.active && obby.state === 'countdown');
   if (skins.isOpen) {   // the selection screen owns the canvas: no world update / render while it is up
     sfx.loop('pad', { vol: 1, rate: 1 }); sfx.loop('city', { vol: 0, rate: 1 }); sfx.loop('crowd', { vol: 0, rate: 1 }); sfx.loop('steps', { vol: 0 }); sfx.loop('scooter', { vol: 0 });

@@ -852,3 +852,18 @@ body.touch #skins .sl-lbl { justify-content: space-between; }
 #rh-flash { position: fixed; inset: 0; pointer-events: none; z-index: 30; background: #e8ecff; opacity: 0; }
 #rh-flash.go { animation: rhflash .55s ease-out; }
 @keyframes rhflash { 0% { opacity: .75; } 12% { opacity: .1; } 22% { opacity: .55; } 100% { opacity: 0; } }
+
+/* ---------------------------------------------------------------- gamepad (src/input.js) */
+/* key hints turn into pad buttons while a controller is the last thing used */
+body.pad kbd[data-pad] { font-size: 0 !important; }
+body.pad kbd[data-pad]::after { content: attr(data-pad); font-size: 11px; font-weight: 700; letter-spacing: .5px; }
+body.pad #prompt kbd[data-pad]::after { font-size: inherit; font-size: 15px; }
+body.pad kbd[data-pad=A], body.pad kbd[data-pad=B], body.pad kbd[data-pad=X], body.pad kbd[data-pad=Y] {
+  display: inline-grid; place-items: center; min-width: 1.6em; height: 1.6em; padding: 0 !important; border-radius: 50% !important; color: #fff !important; font-size: 0 !important; }
+body.pad kbd[data-pad=A] { background: #3ec45a !important; } body.pad kbd[data-pad=B] { background: #e5413b !important; }
+body.pad kbd[data-pad=X] { background: #2f7cf6 !important; } body.pad kbd[data-pad=Y] { background: #f3b70f !important; color: #1a1200 !important; }
+body.pad kbd[data-pad=A]::after, body.pad kbd[data-pad=B]::after, body.pad kbd[data-pad=X]::after, body.pad kbd[data-pad=Y]::after { font-size: 12px; }
+/* the focus ring the d-pad / stick moves around menus */
+.padfocus { outline: 3px solid #5fd8ff !important; outline-offset: 2px; box-shadow: 0 0 0 6px rgba(95,216,255,.25) !important; }
+/* handhelds with touchscreens (Ally, Legion Go, Steam Deck): no on-screen sticks / buttons while the pad is in use */
+body.touch.pad #joy, body.touch.pad #jumpbtn, body.touch.pad #usebtn, body.touch.pad #mobbtn { display: none !important; }
