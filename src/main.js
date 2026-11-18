@@ -335,6 +335,18 @@ const cam = new FollowCamera(camera, world.physics);
 cam.yaw = 0;
 const input = new Input(canvas);
 const hud = new HUD(world, progress);
+// ROG Ally / Legion Go in Desktop control mode: the handheld hides its controller from the browser and types keys instead
+// (A = Enter, B = Esc), so A opens chat instead of jumping. Windows + touchscreen + no gamepad seen + Enter -> say how to switch.
+let padSeen = false, allyTold = false;
+addEventListener('bv-pad', () => { padSeen = true; });
+addEventListener('keydown', (e) => {
+  if (allyTold || padSeen || e.key !== 'Enter' || !e.isTrusted || !started) return;
+  if (!/Win/i.test(navigator.userAgentData?.platform || navigator.platform || '') || !(navigator.maxTouchPoints > 0)) return;
+  if (navigator.getGamepads && [...navigator.getGamepads()].some((g) => g && g.connected)) { padSeen = true; return; }
+  allyTold = true;
+  hud.toast('🎮 ON A HANDHELD? SWITCH IT TO GAMEPAD MODE');
+  hud.chat('SYSTEM', 'BagVerse', '🎮 Playing on a ROG Ally / Legion Go? Its controls are in Desktop mode (A = Enter, which opens chat). Open Command Center → Control Mode → Gamepad, then press any button: A jumps, B uses, X scooter.', '#5fd8ff');
+}, true);
 addEventListener('bv-pad', (e) => {
   if (!e.detail.connected) { hud.toast('🎮 CONTROLLER DISCONNECTED'); return; }
   hud.toast('🎮 CONTROLLER CONNECTED');
